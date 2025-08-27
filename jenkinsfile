@@ -167,9 +167,12 @@ pipeline {
                         // REMOVE returnStatus: true and the if-check
                         
                         sh """
+                            # go back to workspace root for retries
+                            cd ${env.WORKSPACE}
+
+                            # run the playbook
                             . ansible-venv/bin/activate
                             cd ${env.REPO_DIR}
-                            ls -la
                             ${fullCmd}
                         """
                         
