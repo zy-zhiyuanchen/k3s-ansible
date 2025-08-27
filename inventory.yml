@@ -64,6 +64,7 @@ k3s_cluster:
     # MetalLB Configuration
     install_metallb: true
     metallb_version: "0.15.2"
+    metallb_chart_version: "0.15.2"
     metallb_ip_pools:
       - name: default-pool
         addresses:
