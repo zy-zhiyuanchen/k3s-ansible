@@ -1,0 +1,6 @@
+---
+cilium_version: "1.18.1"  # noqa var-naming[no-role-prefix]
+cilium_cli_version: "0.18.6"  # noqa var-naming[no-role-prefix]
+cilium_cli_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"  # noqa var-naming[no-role-prefix]
+cilium_install_timeout: 600  # noqa var-naming[no-role-prefix]
+cilium_force_upgrade: false # noqa var-naming[no-role-prefix]

@@ -19,3 +19,32 @@
 #   become: true
 #   roles:
 #     - role: k3s_agent
+
+
+- name: Install/Upgrade Helm on K3S server
+  hosts: server
+  become: true
+  vars:
+    helm_force_upgrade: false
+  roles:
+    - role: helm
+
+
+- name: Install/Upgrade Cilium on K3S server
+  hosts: server
+  become: true
+  vars:
+    cilium_force_upgrade: false
+  roles:
+    - role: cilium
+      when: install_cilium | default(false)
+  
+
+- name: Install/Upgrade MetalLB on K3S server
+  hosts: server
+  become: true
+  vars:
+    metallb_force_upgrade: false
+  roles:
+    - role: metallb
+      when: install_metallb | default(false)
