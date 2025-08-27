@@ -140,8 +140,9 @@ pipeline {
             steps {
                     script {
                         echo "🎭 Running Ansible playbook..."
+                        sh "cd ${env.REPO_DIR}"
                         def cmd = ". ansible-venv/bin/activate && ansible-playbook"
-                        def flags = ["-i ${env.REPO_DIR}/inventory.yml"]
+                        def flags = ["-i inventory.yml"]
 
                         if (params.DRY_RUN) { flags.add("--check --diff") }
                         if (params.VERBOSE) { flags.add("-vvv") }
@@ -150,13 +151,13 @@ pipeline {
                         def playbookFile = ""
                         switch(params.PLAYBOOK_ACTION) {
                             case 'install-all':
-                                playbookFile = "${env.REPO_DIR}/playbooks/site.yml"; break
+                                playbookFile = "playbooks/site.yml"; break
                             case 'install-only-k3s':
-                                playbookFile = "${env.REPO_DIR}/playbooks/site.yml"
+                                playbookFile = "playbooks/site.yml"
                                 flags.add("-e 'install_cilium=false install_metallb=false'"); break
-                            case 'k3s-upgrade': playbookFile = "${env.REPO_DIR}/playbooks/upgrade.yml"; break
-                            case 'reboot': playbookFile = "${env.REPO_DIR}/playbooks/reboot.yml"; break
-                            case 'reset': playbookFile = "${env.REPO_DIR}/playbooks/reset.yml"; break
+                            case 'k3s-upgrade': playbookFile = "playbooks/upgrade.yml"; break
+                            case 'reboot': playbookFile = "playbooks/reboot.yml"; break
+                            case 'reset': playbookFile = "playbooks/reset.yml"; break
                             default: error "Unknown action ${params.PLAYBOOK_ACTION}"
                         }
 
