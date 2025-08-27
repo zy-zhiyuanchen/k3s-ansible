@@ -1,0 +1,454 @@
+pipeline {
+    agent any
+    
+    parameters {
+        choice(
+            name: 'PLAYBOOK_ACTION',
+            choices: [
+                'install',
+                'upgrade',
+                'reboot', 
+                'reset',
+                'install-only-k3s',
+                'install-k3s-cilium',
+                'install-k3s-metallb',
+                'install-all'
+            ],
+            description: 'Select the action to perform'
+        )
+        
+        string(
+            name: 'GITHUB_REPO',
+            defaultValue: 'https://github.com/k3s-io/k3s-ansible.git',
+            description: 'K3s Ansible GitHub Repository URL'
+        )
+        
+        string(
+            name: 'GITHUB_BRANCH',
+            defaultValue: 'master',
+            description: 'Git branch to checkout'
+        )
+        
+        text(
+            name: 'INVENTORY_CONTENT',
+            defaultValue: '''---
+k3s_cluster:
+  children:
+    server:
+      hosts:
+        192.168.1.10:
+    agent:
+      hosts:
+        192.168.1.11:
+        192.168.1.12:
+  vars:
+    ansible_port: 22
+    ansible_user: ubuntu
+    k3s_version: v1.30.2+k3s1
+    token: "changeme!"
+    api_endpoint: "{{ hostvars[groups['server'][0]]['ansible_host'] | default(groups['server'][0]) }}"''',
+            description: 'Ansible inventory content (YAML format)'
+        )
+        
+        // K3s Configuration
+        string(
+            name: 'K3S_VERSION',
+            defaultValue: 'v1.30.2+k3s1',
+            description: 'K3s version to install'
+        )
+        
+        // Cilium Configuration
+        booleanParam(
+            name: 'INSTALL_CILIUM',
+            defaultValue: true,
+            description: 'Install Cilium CNI'
+        )
+        
+        string(
+            name: 'CILIUM_VERSION',
+            defaultValue: '1.15.10',
+            description: 'Cilium version'
+        )
+        
+        string(
+            name: 'CILIUM_CLI_VERSION',
+            defaultValue: '0.15.25',
+            description: 'Cilium CLI version'
+        )
+        
+        // Helm Configuration
+        string(
+            name: 'HELM_VERSION',
+            defaultValue: '3.14.0',
+            description: 'Helm version'
+        )
+        
+        // MetalLB Configuration
+        booleanParam(
+            name: 'INSTALL_METALLB',
+            defaultValue: true,
+            description: 'Install MetalLB'
+        )
+        
+        string(
+            name: 'METALLB_VERSION',
+            defaultValue: '0.14.8',
+            description: 'MetalLB version'
+        )
+        
+        string(
+            name: 'METALLB_CHART_VERSION',
+            defaultValue: '0.14.8',
+            description: 'MetalLB Helm chart version'
+        )
+        
+        text(
+            name: 'METALLB_IP_POOLS',
+            defaultValue: '''- name: default-pool
+  addresses:
+    - 192.168.1.200-192.168.1.250
+  protocol: layer2''',
+            description: 'MetalLB IP pools configuration (YAML format)'
+        )
+        
+        // Network Configuration
+        string(
+            name: 'CLUSTER_CIDR',
+            defaultValue: '10.42.0.0/16',
+            description: 'Kubernetes cluster CIDR'
+        )
+        
+        string(
+            name: 'SERVICE_CIDR',
+            defaultValue: '10.43.0.0/16',
+            description: 'Kubernetes service CIDR'
+        )
+        
+        // Advanced Options
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: false,
+            description: 'Run in check mode (dry run)'
+        )
+        
+        booleanParam(
+            name: 'VERBOSE',
+            defaultValue: false,
+            description: 'Enable verbose output'
+        )
+        
+        string(
+            name: 'EXTRA_VARS',
+            defaultValue: '',
+            description: 'Additional Ansible variables (key=value format, space separated)'
+        )
+    }
+    
+    environment {
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
+        ANSIBLE_STDOUT_CALLBACK = 'yaml'
+        ANSIBLE_FORCE_COLOR = 'true'
+    }
+    
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    echo "🚀 Starting K3s Ansible Pipeline"
+                    echo "Action: ${params.PLAYBOOK_ACTION}"
+                    echo "Repository: ${params.GITHUB_REPO}"
+                    echo "Branch: ${params.GITHUB_BRANCH}"
+                    
+                    // Clean workspace
+                    cleanWs()
+                }
+            }
+        }
+        
+        stage('Install Prerequisites') {
+            steps {
+                script {
+                    echo "📦 Installing prerequisites..."
+                    
+                    // Check if running on different OS
+                    def osName = sh(script: "uname -s", returnStdout: true).trim()
+                    echo "Detected OS: ${osName}"
+                    
+                    if (isUnix()) {
+                        // Install Python3 and pip if not available
+                        sh '''
+                            if command -v apt-get >/dev/null 2>&1; then
+                                # Debian/Ubuntu
+                                sudo apt-get update
+                                sudo apt-get install -y python3 python3-pip python3-venv git
+                            elif command -v yum >/dev/null 2>&1; then
+                                # RHEL/CentOS
+                                sudo yum install -y python3 python3-pip git epel-release
+                                sudo yum install -y python3-virtualenv || sudo pip3 install virtualenv
+                            elif command -v dnf >/dev/null 2>&1; then
+                                # Fedora
+                                sudo dnf install -y python3 python3-pip python3-virtualenv git
+                            else
+                                echo "Unsupported package manager. Please install python3, pip3, and git manually."
+                                exit 1
+                            fi
+                        '''
+                        
+                        // Create Python virtual environment
+                        sh '''
+                            python3 -m venv ansible-venv
+                            source ansible-venv/bin/activate
+                            pip install --upgrade pip
+                            pip install ansible>=8.0.0 ansible-core>=2.15.0
+                        '''
+                    } else {
+                        error "Windows agents are not supported for this pipeline"
+                    }
+                }
+            }
+        }
+        
+        stage('Checkout Code') {
+            steps {
+                script {
+                    echo "📥 Checking out k3s-ansible repository..."
+                    
+                    git branch: params.GITHUB_BRANCH,
+                        url: params.GITHUB_REPO
+                }
+            }
+        }
+        
+        stage('Install Ansible Collections') {
+            steps {
+                script {
+                    echo "📚 Installing Ansible collections..."
+                    
+                    sh '''
+                        source ansible-venv/bin/activate
+                        
+                        # Install collections from requirements file if exists
+                        if [ -f "collections/requirements.yml" ]; then
+                            ansible-galaxy collection install -r collections/requirements.yml
+                        fi
+                        
+                        # Install additional collections that might be needed
+                        ansible-galaxy collection install community.general
+                        ansible-galaxy collection install ansible.posix
+                        ansible-galaxy collection install kubernetes.core
+                        
+                        # Verify installations
+                        ansible-galaxy collection list
+                    '''
+                }
+            }
+        }
+        
+        stage('Generate Inventory') {
+            steps {
+                script {
+                    echo "📝 Generating inventory file..."
+                    
+                    // Write inventory content to file
+                    writeFile file: 'inventory.yml', text: params.INVENTORY_CONTENT
+                    
+                    // Validate inventory syntax
+                    sh '''
+                        source ansible-venv/bin/activate
+                        ansible-inventory -i inventory.yml --list > /dev/null
+                        echo "✅ Inventory validation successful"
+                    '''
+                }
+            }
+        }
+        
+        stage('Generate Extra Variables') {
+            steps {
+                script {
+                    echo "⚙️ Preparing Ansible variables..."
+                    
+                    def extraVars = [
+                        "k3s_version=${params.K3S_VERSION}",
+                        "install_cilium=${params.INSTALL_CILIUM}",
+                        "cilium_version=${params.CILIUM_VERSION}",
+                        "cilium_cli_version=${params.CILIUM_CLI_VERSION}",
+                        "helm_version=${params.HELM_VERSION}",
+                        "install_metallb=${params.INSTALL_METALLB}",
+                        "metallb_version=${params.METALLB_VERSION}",
+                        "metallb_chart_version=${params.METALLB_CHART_VERSION}"
+                    ]
+                    
+                    // Add network configuration to server_config_yaml
+                    def serverConfig = """cluster-cidr: "${params.CLUSTER_CIDR}"
+service-cidr: "${params.SERVICE_CIDR}"
+disable:
+  - servicelb
+  - traefik
+  - network-policy
+flannel-backend: none
+disable-network-policy: true
+write-kubeconfig-mode: "0644\""""
+                    
+                    extraVars.add("server_config_yaml='${serverConfig}'")
+                    
+                    // Parse MetalLB IP pools
+                    if (params.INSTALL_METALLB && params.METALLB_IP_POOLS.trim()) {
+                        // Create a temporary file with IP pools configuration
+                        writeFile file: 'metallb_pools.yml', text: params.METALLB_IP_POOLS
+                        extraVars.add("metallb_ip_pools=@metallb_pools.yml")
+                    }
+                    
+                    // Add user-provided extra vars
+                    if (params.EXTRA_VARS.trim()) {
+                        extraVars.addAll(params.EXTRA_VARS.split(' '))
+                    }
+                    
+                    // Store for use in next stage
+                    env.ANSIBLE_EXTRA_VARS = extraVars.join(' ')
+                    
+                    echo "Generated extra vars: ${env.ANSIBLE_EXTRA_VARS}"
+                }
+            }
+        }
+        
+        stage('Run Ansible Playbook') {
+            steps {
+                script {
+                    echo "🎭 Running Ansible playbook..."
+                    
+                    def playbookCmd = "source ansible-venv/bin/activate && ansible-playbook"
+                    def playbookFile = ""
+                    def ansibleFlags = []
+                    
+                    // Add common flags
+                    ansibleFlags.add("-i inventory.yml")
+                    
+                    if (params.DRY_RUN) {
+                        ansibleFlags.add("--check")
+                        ansibleFlags.add("--diff")
+                    }
+                    
+                    if (params.VERBOSE) {
+                        ansibleFlags.add("-vvv")
+                    }
+                    
+                    // Add extra variables
+                    if (env.ANSIBLE_EXTRA_VARS) {
+                        ansibleFlags.add("-e '${env.ANSIBLE_EXTRA_VARS}'")
+                    }
+                    
+                    // Determine playbook based on action
+                    switch(params.PLAYBOOK_ACTION) {
+                        case 'install':
+                        case 'install-all':
+                            playbookFile = "playbooks/site.yml"
+                            break
+                        case 'install-only-k3s':
+                            playbookFile = "playbooks/site.yml"
+                            ansibleFlags.add("-e 'install_cilium=false install_metallb=false'")
+                            break
+                        case 'install-k3s-cilium':
+                            playbookFile = "playbooks/site.yml"
+                            ansibleFlags.add("-e 'install_metallb=false'")
+                            break
+                        case 'install-k3s-metallb':
+                            playbookFile = "playbooks/site.yml"
+                            ansibleFlags.add("-e 'install_cilium=false'")
+                            break
+                        case 'upgrade':
+                            playbookFile = "playbooks/upgrade.yml"
+                            break
+                        case 'reboot':
+                            playbookFile = "playbooks/reboot.yml"
+                            break
+                        case 'reset':
+                            playbookFile = "playbooks/reset.yml"
+                            break
+                        default:
+                            error "Unknown playbook action: ${params.PLAYBOOK_ACTION}"
+                    }
+                    
+                    def fullCommand = "${playbookCmd} ${playbookFile} ${ansibleFlags.join(' ')}"
+                    
+                    echo "Executing: ${fullCommand}"
+                    
+                    // Run the playbook
+                    def result = sh(
+                        script: fullCommand,
+                        returnStatus: true
+                    )
+                    
+                    if (result != 0) {
+                        error "Ansible playbook execution failed with exit code: ${result}"
+                    }
+                    
+                    echo "✅ Ansible playbook completed successfully!"
+                }
+            }
+        }
+        
+        stage('Post-Installation Verification') {
+            when {
+                expression { 
+                    params.PLAYBOOK_ACTION in ['install', 'install-all', 'install-only-k3s', 'install-k3s-cilium', 'install-k3s-metallb', 'upgrade'] 
+                }
+            }
+            steps {
+                script {
+                    echo "🔍 Performing post-installation verification..."
+                    
+                    sh '''
+                        source ansible-venv/bin/activate
+                        
+                        # Run a simple verification playbook
+                        ansible all -i inventory.yml -m shell -a "k3s --version" --become || true
+                        
+                        # Check cluster status on server nodes
+                        ansible server -i inventory.yml -m shell -a "kubectl get nodes" --become || true
+                        
+                        # Check pods status if CNI is installed
+                        if [ "${INSTALL_CILIUM}" = "true" ] || [ "${INSTALL_METALLB}" = "true" ]; then
+                            ansible server[0] -i inventory.yml -m shell -a "kubectl get pods --all-namespaces" --become || true
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo "🧹 Cleaning up..."
+            }
+            
+            // Archive logs
+            archiveArtifacts artifacts: '*.yml', allowEmptyArchive: true
+            
+            // Clean workspace
+            cleanWs()
+        }
+        
+        success {
+            script {
+                echo "✅ Pipeline completed successfully!"
+                
+                // Send success notification (customize as needed)
+                if (env.SLACK_WEBHOOK || env.TEAMS_WEBHOOK) {
+                    echo "Sending success notification..."
+                }
+            }
+        }
+        
+        failure {
+            script {
+                echo "❌ Pipeline failed!"
+                
+                // Send failure notification (customize as needed)
+                if (env.SLACK_WEBHOOK || env.TEAMS_WEBHOOK) {
+                    echo "Sending failure notification..."
+                }
+            }
+        }
+    }
+}
