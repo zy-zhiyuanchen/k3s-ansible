@@ -140,8 +140,8 @@ pipeline {
             steps {
                     script {
                         echo "🎭 Running Ansible playbook..."
-                        sh "cd ${env.REPO_DIR}"
-                        def cmd = ". ansible-venv/bin/activate && ansible-playbook"
+
+                        def cmd = "ansible-playbook"
                         def flags = ["-i inventory.yml"]
 
                         if (params.DRY_RUN) { flags.add("--check --diff") }
@@ -165,7 +165,13 @@ pipeline {
                         echo "Executing: ${fullCmd}"
 
                         // REMOVE returnStatus: true and the if-check
-                        sh(fullCmd)
+                        
+                        sh """
+                            . ansible-venv/bin/activate
+                            cd ${env.REPO_DIR}
+                            ls -la
+                            ${fullCmd}
+                        """
                         
                         echo "✅ Playbook completed successfully"
                     }
