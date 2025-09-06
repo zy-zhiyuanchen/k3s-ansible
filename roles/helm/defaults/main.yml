@@ -1,5 +1,0 @@
----
-helm_version: "3.14.0"  # noqa var-naming[no-role-prefix]
-helm_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"  # noqa var-naming[no-role-prefix]
-helm_install_path: "/usr/local/bin/helm"  # noqa var-naming[no-role-prefix]
-helm_force_upgrade: false  # noqa var-naming[no-role-prefix]

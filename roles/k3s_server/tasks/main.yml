@@ -29,9 +29,9 @@
     - name: Download K3s binary
       ansible.builtin.command:
         cmd: /usr/local/bin/k3s-install.sh
-      environment: "{{ proxy_env | combine({
-        'INSTALL_K3S_SKIP_START': 'true',
-        'INSTALL_K3S_VERSION': k3s_version
+      environment: "{{ proxy_env | default({}) | combine(extra_install_envs | default({})) | combine({
+          'INSTALL_K3S_SKIP_START': 'true',
+          'INSTALL_K3S_VERSION': k3s_version
       }) }}"
       changed_when: true
 
@@ -276,7 +276,7 @@
       when: not ansible_check_mode and (groups[server_group] | length) > 1
       ansible.builtin.command:
         cmd: >
-          k3s kubectl get nodes -l "node-role.kubernetes.io/control-plane=true" -o=jsonpath="{.items[*].metadata.name}"
+          {{ k3s_kubectl_binary | default('k3s kubectl') }} get nodes -l "node-role.kubernetes.io/control-plane=true" -o=jsonpath="{.items[*].metadata.name}"
       register: nodes
       until: nodes.rc == 0 and (nodes.stdout.split() | length) == (groups[server_group] | length)
       retries: 20

@@ -1,154 +1,242 @@
 ---
-- name: Wait for K3s to be ready
-  ansible.builtin.wait_for:
-    port: 6443
-    host: "{{ ansible_default_ipv4.address }}"
-    delay: 10
-    timeout: 300
-
-- name: Wait for Kubernetes API to be responsive
-  ansible.builtin.command:
-    cmd: kubectl get nodes
-  register: kubectl_result
-  until: kubectl_result.rc == 0
-  retries: 30
-  delay: 10
-  changed_when: false
-
-- name: Check if Cilium CLI is already installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/cilium
-  register: cilium_cli_installed
-
-- name: Get current Cilium CLI version
-  when: cilium_cli_installed.stat.exists
-  ansible.builtin.command:
-    cmd: /usr/local/bin/cilium version --client
-  register: current_cilium_cli_version
-  failed_when: false
-  changed_when: false
-
-- name: Extract current Cilium CLI version
-  when: cilium_cli_installed.stat.exists and current_cilium_cli_version.rc == 0
-  ansible.builtin.set_fact:
-    installed_cilium_cli_version: "{{ current_cilium_cli_version.stdout | regex_search('cilium-cli: v([0-9.]+)', '\\1') | first }}"
-
-- name: Download and install/upgrade Cilium CLI
-  when: >
-    not cilium_cli_installed.stat.exists or
-    (installed_cilium_cli_version is defined and installed_cilium_cli_version is version(cilium_cli_version, '<'))
+- name: Prepare Cilium CLI on first master and deploy CNI
+  when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
+  run_once: true
   block:
-    - name: Create temporary directory for Cilium CLI download
-      ansible.builtin.tempfile:
-        state: directory
-        suffix: cilium
-      register: cilium_temp_dir
-
-    - name: Download Cilium CLI
-      ansible.builtin.get_url:
-        url: "https://github.com/cilium/cilium-cli/releases/download/v{{ cilium_cli_version }}/cilium-linux-{{ cilium_cli_arch }}.tar.gz"
-        dest: "{{ cilium_temp_dir.path }}/cilium-cli.tar.gz"
-        mode: "0644"
-
-    - name: Extract Cilium CLI
-      ansible.builtin.unarchive:
-        src: "{{ cilium_temp_dir.path }}/cilium-cli.tar.gz"
-        dest: "{{ cilium_temp_dir.path }}"
-        remote_src: true
-
-    - name: Install/Upgrade Cilium CLI
-      ansible.builtin.copy:
-        src: "{{ cilium_temp_dir.path }}/cilium"
-        dest: /usr/local/bin/cilium
-        mode: "0755"
-        remote_src: true
-
-    - name: Clean up temporary directory
+    - name: Create tmp directory on first master
       ansible.builtin.file:
-        path: "{{ cilium_temp_dir.path }}"
-        state: absent
+        path: /tmp/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Check if Cilium is already installed
-  ansible.builtin.command:
-    cmd: kubectl get daemonset cilium -n kube-system
-  register: cilium_check
-  failed_when: false
-  changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    - name: Check if Cilium CLI is installed
+      ansible.builtin.command: cilium version
+      register: cilium_cli_installed
+      failed_when: false
+      changed_when: false
+      ignore_errors: true
 
-- name: Get current Cilium version
-  when: cilium_check.rc == 0
-  ansible.builtin.command:
-    cmd: kubectl get daemonset cilium -n kube-system -o jsonpath='{.spec.template.spec.containers[0].image}'
-  register: current_cilium_image
-  changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    - name: Check for Cilium CLI version in command output
+      ansible.builtin.set_fact:
+        installed_cli_version: >-
+          {{
+            cilium_cli_installed.stdout_lines
+            | join(' ')
+            | regex_findall('cilium-cli: (v\d+\.\d+\.\d+)')
+            | first
+            | default('unknown')
+          }}
+      when: cilium_cli_installed.rc == 0
 
-- name: Extract current Cilium version
-  when: cilium_check.rc == 0 and current_cilium_image.stdout is defined
-  ansible.builtin.set_fact:
-    installed_cilium_version: "{{ current_cilium_image.stdout.split(':')[1] | regex_replace('^v', '') }}"
+    - name: Get latest stable Cilium CLI version file
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt
+        dest: /tmp/k3s/cilium-cli-stable.txt
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Determine if Cilium needs installation or upgrade
-  ansible.builtin.set_fact:
-    cilium_needs_action: >-
-      {{
-        cilium_check.rc != 0 or
-        cilium_force_upgrade |bool or
-        (installed_cilium_version is defined and installed_cilium_version is version(cilium_version, '<'))
-      }}
+    - name: Read Cilium CLI stable version from file
+      ansible.builtin.command: cat /tmp/k3s/cilium-cli-stable.txt
+      register: cli_ver
+      changed_when: false
 
-- name: Install or upgrade Cilium CNI
-  when: cilium_needs_action |bool
-  block:
-    - name: Display action being performed
+    - name: Log installed Cilium CLI version
       ansible.builtin.debug:
-        msg: >-
-          {% if cilium_check.rc != 0 %}
-          Installing Cilium {{ cilium_version }} for the first time
-          {% else %}
-          Upgrading Cilium from {{ installed_cilium_version | default('unknown') }} to {{ cilium_version }}
-          {% endif %}
+        msg: "Installed Cilium CLI version: {{ installed_cli_version | default('Not installed') }}"
 
-    - name: Install/Upgrade Cilium using Cilium CLI
-      ansible.builtin.command:
-        cmd: >
-          cilium install 
-          --version {{ cilium_version }}
-          --set k8sServiceHost={{ api_endpoint }}
-          --set k8sServicePort=6443
-          --set cluster.name=k3s-cluster
-          --set ipam.mode=kubernetes
-          {% if cilium_check.rc == 0 %}--upgrade{% endif %}
+    - name: Log latest stable Cilium CLI version
+      ansible.builtin.debug:
+        msg: "Latest Cilium CLI version: {{ cli_ver.stdout }}"
+
+    - name: Determine if Cilium CLI needs installation or update
+      ansible.builtin.set_fact:
+        cilium_cli_needs_update: >-
+          {{
+            cilium_cli_installed.rc != 0 or
+            (cilium_cli_installed.rc == 0 and
+            installed_cli_version != cli_ver.stdout)
+          }}
+
+    - name: Install or update Cilium CLI
+      when: cilium_cli_needs_update
+      block:
+        - name: Set architecture variable
+          ansible.builtin.set_fact:
+            cli_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+        - name: Download Cilium CLI and checksum
+          ansible.builtin.get_url:
+            url: "{{ cilium_base_url }}/cilium-linux-{{ cli_arch }}{{ item }}"
+            dest: /tmp/k3s/cilium-linux-{{ cli_arch }}{{ item }}
+            owner: root
+            group: root
+            mode: "0755"
+          loop:
+            - .tar.gz
+            - .tar.gz.sha256sum
+          vars:
+            cilium_base_url: https://github.com/cilium/cilium-cli/releases/download/{{ cli_ver.stdout }}
+
+        - name: Verify the downloaded tarball
+          ansible.builtin.shell: |
+            cd /tmp/k3s && sha256sum --check cilium-linux-{{ cli_arch }}.tar.gz.sha256sum
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Extract Cilium CLI to /usr/local/bin
+          ansible.builtin.unarchive:
+            src: /tmp/k3s/cilium-linux-{{ cli_arch }}.tar.gz
+            dest: /usr/local/bin
+            remote_src: true
+
+        - name: Remove downloaded tarball and checksum file
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/k3s/cilium-linux-{{ cli_arch }}.tar.gz
+            - /tmp/k3s/cilium-linux-{{ cli_arch }}.tar.gz.sha256sum
+
+    - name: Wait for connectivity to kubernetes API endpoint
+      ansible.builtin.command: ping -c 1 {{ api_endpoint }}
+      register: ping_result
+      until: ping_result.rc == 0
+      retries: 21
+      delay: 1
+      ignore_errors: true
+      changed_when: false
+
+    - name: Fail if kubernetes API endpoint not reachable
+      ansible.builtin.fail:
+        msg: API endpoint {{ api_endpoint }} is not reachable
+      when: ping_result.rc != 0
+
+    - name: Test for existing Cilium install
+      ansible.builtin.command: |
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} -n kube-system get daemonsets cilium
+      register: cilium_installed
+      failed_when: false
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check existing Cilium install
+      when: cilium_installed.rc == 0
+      block:
+        - name: Check Cilium version
+          ansible.builtin.command: cilium version
+          register: cilium_version
+          failed_when: false
+          changed_when: false
+          ignore_errors: true
+
+        - name: Parse installed Cilium version
+          ansible.builtin.set_fact:
+            installed_cilium_version: >-
+              {{
+                cilium_version.stdout_lines
+                | join(' ')
+                | regex_findall('cilium image.+(\d+\.\d+\.\d+)')
+                | first
+                | default('unknown')
+              }}
+
+        - name: Determine if Cilium needs update
+          ansible.builtin.set_fact:
+            cilium_needs_update: >-
+              {{ 'v' + installed_cilium_version != cilium_tag }}
+
+        - name: Log result
+          ansible.builtin.debug:
+            msg: >
+              Installed Cilium version: {{ installed_cilium_version }},
+              Target Cilium version: {{ cilium_tag }},
+              Update needed: {{ cilium_needs_update }}
+
+    - name: Install Cilium
+      ansible.builtin.command: >-
+        {% if cilium_installed.rc != 0 %}
+        cilium install
+        {% else %}
+        cilium upgrade
+        {% endif %}
+        --version "{{ cilium_tag }}"
+        --helm-set operator.replicas="1"
+        --helm-set ipam.operator.clusterPoolIPv4PodCIDRList={{ cluster_cidr }}
+        {% if cilium_mode == "native" or (cilium_bgp and cilium_exportPodCIDR != 'false') %}
+        --helm-set ipv4NativeRoutingCIDR={{ cluster_cidr }}
+        {% endif %}
+        --helm-set k8sServiceHost="127.0.0.1"
+        --helm-set k8sServicePort="6443"
+        --helm-set routingMode={{ cilium_mode }}
+        --helm-set autoDirectNodeRoutes={{ "true" if cilium_mode == "native" else "false" }}
+        --helm-set kubeProxyReplacement={{ kube_proxy_replacement }}
+        --helm-set bpf.masquerade={{ enable_bpf_masquerade }}
+        --helm-set bgpControlPlane.enabled={{ cilium_bgp | default("false") }}
+        --helm-set hubble.enabled={{ "true" if cilium_hubble else "false" }}
+        --helm-set hubble.relay.enabled={{ "true" if cilium_hubble else "false" }}
+        --helm-set hubble.ui.enabled={{ "true" if cilium_hubble else "false" }}
       environment:
-        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
       register: cilium_install_result
       changed_when: cilium_install_result.rc == 0
-
-    - name: Wait for Cilium to be ready
-      ansible.builtin.command:
-        cmd: cilium status --wait --wait-duration={{ cilium_install_timeout }}s
-      environment:
-        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-      register: cilium_status_result
+      when: cilium_installed.rc != 0 or cilium_needs_update
+      
+    - name: Wait for Cilium resources
+      ansible.builtin.command: >-
+        {% if item.type == 'daemonset' %}
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait pods
+        --namespace=kube-system
+        --selector='k8s-app=cilium'
+        --for=condition=Ready
+        {% else %}
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait {{ item.type }}/{{ item.name }}
+        --namespace=kube-system
+        --for=condition=Available
+        {% endif %}
+        --timeout=30s
+      register: cr_result
       changed_when: false
-      retries: 3
-      delay: 10
+      until: cr_result is succeeded
+      retries: 30
+      delay: 7
+      with_items:
+        - { name: cilium-operator, type: deployment }
+        - { name: cilium, type: daemonset, selector: k8s-app=cilium }
+        - { name: hubble-relay, type: deployment, check_hubble: true }
+        - { name: hubble-ui, type: deployment, check_hubble: true }
+      loop_control:
+        label: "{{ item.type }}/{{ item.name }}"
+      when: >-
+        not item.check_hubble | default(false) or (item.check_hubble | default(false) and cilium_hubble)
 
-- name: Verify Cilium installation
-  ansible.builtin.command:
-    cmd: cilium status
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  register: cilium_final_status
-  changed_when: false
+    - name: Configure Cilium BGP
+      when: cilium_bgp
+      block:
+        - name: Copy BGP manifests to first master
+          ansible.builtin.template:
+            src: cilium.crs.j2
+            dest: /tmp/k3s/cilium-bgp.yaml
+            owner: root
+            group: root
+            mode: "0755"
 
-- name: Display Cilium status
-  ansible.builtin.debug:
-    var: cilium_final_status.stdout_lines
+        - name: Apply BGP manifests
+          ansible.builtin.command:
+            cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} apply -f /tmp/k3s/cilium-bgp.yaml"
+          register: apply_cr
+          changed_when: "'configured' in apply_cr.stdout or 'created' in apply_cr.stdout"
+          failed_when: "'is invalid' in apply_cr.stderr"
+          ignore_errors: true
 
-- name: Save Cilium version info
-  ansible.builtin.debug:
-    msg: "Cilium CLI {{ cilium_cli_version }} and Cilium CNI {{ cilium_version }} are installed"
+        - name: Print error message if BGP manifests application fails
+          ansible.builtin.debug:
+            msg: "{{ apply_cr.stderr }}"
+          when: "'is invalid' in apply_cr.stderr"
+
+        - name: Test for BGP config resources
+          ansible.builtin.command: "{{ k3s_kubectl_binary | default('k3s kubectl') }} get CiliumLoadBalancerIPPool.cilium.io"
+          changed_when: false

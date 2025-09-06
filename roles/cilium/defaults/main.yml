@@ -1,6 +1,14 @@
----
-cilium_version: "1.18.1"  # noqa var-naming[no-role-prefix]
-cilium_cli_version: "0.18.6"  # noqa var-naming[no-role-prefix]
-cilium_cli_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"  # noqa var-naming[no-role-prefix]
-cilium_install_timeout: 600  # noqa var-naming[no-role-prefix]
-cilium_force_upgrade: false # noqa var-naming[no-role-prefix]
+cilium_bgp: false
+cilium_exportPodCIDR: true  # noqa var-naming
+cilium_bgp_my_asn: 64513
+cilium_bgp_peer_asn: 64512
+cilium_bgp_neighbors: []
+cilium_bgp_neighbors_groups: ['k3s_all']
+cilium_bgp_lb_cidr: 192.168.31.0/24
+cilium_hubble: true
+cilium_mode: native
+
+cluster_cidr: 10.42.0.0/16
+enable_bpf_masquerade: true
+kube_proxy_replacement: true
+server_group: server  # noqa var-naming[no-role-prefix]

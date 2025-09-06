@@ -1,5 +1,0 @@
----
-metallb_version: "0.15.2"  # noqa var-naming[no-role-prefix]
-metallb_namespace: "metallb-system"  # noqa var-naming[no-role-prefix]
-metallb_ip_pools: []  # noqa var-naming[no-role-prefix]
-metallb_force_upgrade: false  # noqa var-naming[no-role-prefix]
