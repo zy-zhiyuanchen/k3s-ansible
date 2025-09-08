@@ -1,0 +1,228 @@
+- name: Install and configure ArgoCD on first master
+  when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
+  run_once: true
+  block:
+    - name: Create tmp directory on first master
+      ansible.builtin.file:
+        path: /tmp/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Check if Helm is installed
+      ansible.builtin.command: helm version --short
+      register: helm_installed
+      failed_when: false
+      changed_when: false
+      ignore_errors: true
+
+    - name: Install Helm if not present
+      when: helm_installed.rc != 0
+      block:
+        - name: Download Helm installation script
+          ansible.builtin.get_url:
+            url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+            dest: /tmp/k3s/get_helm.sh
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Install Helm
+          ansible.builtin.command: /tmp/k3s/get_helm.sh
+          environment:
+            HELM_INSTALL_DIR: /usr/local/bin
+          changed_when: true
+
+        - name: Remove Helm installation script
+          ansible.builtin.file:
+            path: /tmp/k3s/get_helm.sh
+            state: absent
+
+    - name: Wait for connectivity to kubernetes API endpoint
+      ansible.builtin.command: ping -c 1 {{ api_endpoint | default('127.0.0.1') }}
+      register: ping_result
+      until: ping_result.rc == 0
+      retries: 21
+      delay: 1
+      ignore_errors: true
+      changed_when: false
+
+    - name: Fail if kubernetes API endpoint not reachable
+      ansible.builtin.fail:
+        msg: API endpoint {{ api_endpoint | default('127.0.0.1') }} is not reachable
+      when: ping_result.rc != 0
+
+    - name: Check if ArgoCD namespace exists
+      ansible.builtin.command: >-
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} get namespace {{ argocd_namespace }}
+      register: namespace_exists
+      failed_when: false
+      changed_when: false
+      ignore_errors: true
+
+    - name: Create ArgoCD namespace
+      ansible.builtin.command: >-
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} create namespace {{ argocd_namespace }}
+      when: namespace_exists.rc != 0
+      changed_when: true
+
+    - name: Add ArgoCD Helm repository
+      ansible.builtin.command: >-
+        helm repo add {{ helm_repo_name }} {{ helm_repo_url }}
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+      register: helm_repo_add
+      changed_when: "'already exists' not in helm_repo_add.stderr"
+      failed_when: false
+      vars:
+        helm_repo_url: https://argoproj.github.io/argo-helm
+
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+      changed_when: false
+
+    - name: Check if ArgoCD is already installed
+      ansible.builtin.command: >-
+        helm list -n {{ argocd_namespace }} --filter {{ helm_repo_name }}
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+      register: argocd_installed
+      failed_when: false
+      changed_when: false
+      ignore_errors: false
+
+    - name: Get installed ArgoCD version
+      ansible.builtin.set_fact:
+        installed_argocd_version: >-
+          {{
+            argocd_installed.stdout_lines[1].split()[8].split('-')[-1]
+            if argocd_installed.stdout_lines | length > 1
+            else 'none'
+          }}
+      when: argocd_installed.rc == 0 and argocd_installed.stdout_lines | length > 1
+
+    - name: Log ArgoCD installation status
+      ansible.builtin.debug:
+        msg: >
+          Installed ArgoCD version: {{ installed_argocd_version | default('Not installed') }},
+          Target ArgoCD version: {{ argocd_version }}
+
+    - name: Determine if ArgoCD needs installation or upgrade
+      ansible.builtin.set_fact:
+        argocd_needs_install: >-
+          {{
+            argocd_installed.rc != 0 or
+            argocd_installed.stdout_lines | length <= 1 or
+            installed_argocd_version != argocd_version
+          }}
+
+    - name: Generate ArgoCD admin password if not provided
+      ansible.builtin.set_fact:
+        generated_admin_password: "{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"
+      when: argocd_admin_password == ""
+
+    - name: Set admin password variable
+      ansible.builtin.set_fact:
+        admin_password: "{{ argocd_admin_password if argocd_admin_password != '' else generated_admin_password }}"
+
+    - name: Install or upgrade ArgoCD using Helm
+      ansible.builtin.command: >-
+        helm {{ 'upgrade --install' if argocd_needs_install else 'upgrade' }}
+        argocd {{ helm_repo_name }}/{{ helm_chart_name }}
+        --namespace {{ argocd_namespace }}
+        --version {{ argocd_version }}
+        {% if admin_password and admin_password != "" %}
+        --set configs.secret.argocdServerAdminPassword="{{ admin_password | password_hash('bcrypt')  }}"
+        {% endif %}
+        --set server.insecure={{ argocd_server_insecure | lower }}
+        --set controller.replicas=1
+        --set server.replicas=1
+        --set repoServer.replicas=1
+        --set applicationSet.replicas=1
+        --set server.service.type={{ argocd_service_type | default('ClusterIP') }}
+        --wait
+        --timeout=5m
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+      register: argocd_install_result
+      changed_when: argocd_install_result.rc == 0
+      when: argocd_installed.rc != 0 or argocd_needs_install
+
+    - name: Wait for ArgoCD components to be ready
+      ansible.builtin.command: >-
+        {% if item.type == 'statefulset' %}
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait pods
+        --namespace={{ argocd_namespace }}
+        --selector='app.kubernetes.io/name=argocd-application-controller'
+        --for=condition=Ready
+        {% else %}
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait {{ item.type }}/{{ item.name }}
+        --namespace={{ argocd_namespace }}
+        --for=condition=Available
+        {% endif %}
+        --timeout=30s
+      register: component_ready
+      changed_when: false
+      until: component_ready is succeeded
+      retries: 10
+      delay: 7
+      with_items:
+        - { name: argocd-server, type: deployment }
+        - { name: argocd-repo-server, type: deployment }
+        - { name: argocd-application-controller, type: statefulset }
+        - { name: argocd-applicationset-controller, type: deployment }
+      loop_control:
+        label: "{{ item.type }}/{{ item.name }}"
+
+    - name: Get ArgoCD server service status
+      ansible.builtin.command: >-
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} get svc argocd-server
+        --namespace={{ argocd_namespace }}
+        -o jsonpath='{.spec.type}'
+      register: argocd_service_type_out
+      changed_when: false
+
+    - name: Display ArgoCD access information
+      ansible.builtin.debug:
+        msg: |
+          ArgoCD has been successfully installed!
+          
+          Access Information:
+          - Namespace: {{ argocd_namespace }}
+          - Service Type: {{ argocd_service_type_out.stdout }}
+          - Admin Username: admin
+          - Admin Password: admin_password
+          
+          To access ArgoCD UI:
+          {% if argocd_service_type_out.stdout == 'LoadBalancer' %}
+          1. Get external IP: kubectl get svc argocd-server -n {{ argocd_namespace }}
+          2. Access via: http://<EXTERNAL-IP>
+          {% else %}
+          1. Port forward: kubectl port-forward svc/argocd-server -n {{ argocd_namespace }} 8080:443
+          2. Access via: http://localhost:8080
+          {% endif %}
+          
+          CLI Login:
+          argocd login <server-address> --username admin --password admin_password {% if argocd_server_insecure %}--insecure{% endif %}
+
+    - name: Save ArgoCD admin password to file
+      ansible.builtin.copy:
+        content: |
+          ArgoCD Admin Credentials
+          Username: admin
+          Password: {{ admin_password }}
+          
+          Generated on: {{ ansible_date_time.iso8601 }}
+        dest: /tmp/k3s/argocd-admin-credentials.txt
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Clean up temporary files
+      ansible.builtin.file:
+        path: /tmp/k3s
+        state: absent
+      when: false  # Keep temp directory for credentials file

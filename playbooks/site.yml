@@ -38,4 +38,12 @@
     - role: cilium
       when: install_cilium | default(false)
   environment: "{{ proxy_env | default({}) }}"
+
+- name: Install/Upgrade Argocd on K3S server
+  hosts: server
+  become: true
+  roles:
+    - role: argocd
+      when: install_argocd | default(false)
+  environment: "{{ proxy_env | default({}) }}"
   
