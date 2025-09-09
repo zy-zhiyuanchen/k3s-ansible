@@ -13,7 +13,7 @@ k3s_cluster:
   vars:
     ansible_port: 22
     ansible_user: czy
-    k3s_version: v1.33.3+k3s1
+    k3s_version: v1.33.4+k3s1
     # The token should be a random string of reasonable length. You can generate
     # one with the following commands:
     # - openssl rand -base64 64
@@ -60,7 +60,7 @@ k3s_cluster:
     
     # argocd vars
     install_argocd: true
-    argocd_version: 8.3.3 # ArgoCD version tag
+    argocd_version: 8.3.5 # ArgoCD version tag
     argocd_release_name: argocd
     argocd_namespace: argocd
     argocd_admin_password: "{{ vault_argocd_password }}"  # leave empty to auto-generate, or set custom password

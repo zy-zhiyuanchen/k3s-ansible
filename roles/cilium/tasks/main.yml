@@ -30,34 +30,29 @@
           }}
       when: cilium_cli_installed.rc == 0
 
-    - name: Get latest stable Cilium CLI version file
-      ansible.builtin.get_url:
+    - name: Get latest stable Cilium CLI version
+      ansible.builtin.uri:
         url: https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt
-        dest: /tmp/k3s/cilium-cli-stable.txt
-        owner: root
-        group: root
-        mode: "0755"
+        return_content: yes
+      register: cli_ver_response
+      environment: "{{ proxy_env | default({}) }}"
 
-    - name: Read Cilium CLI stable version from file
-      ansible.builtin.command: cat /tmp/k3s/cilium-cli-stable.txt
-      register: cli_ver
-      changed_when: false
-
-    - name: Log installed Cilium CLI version
+    - name: Set latest CLI version fact
+      ansible.builtin.set_fact:
+        latest_cli_version: "{{ cli_ver_response.content | trim }}"
+        
+    - name: Log installed and latest Cilium CLI versions
       ansible.builtin.debug:
-        msg: "Installed Cilium CLI version: {{ installed_cli_version | default('Not installed') }}"
-
-    - name: Log latest stable Cilium CLI version
-      ansible.builtin.debug:
-        msg: "Latest Cilium CLI version: {{ cli_ver.stdout }}"
+        msg: |
+          Installed: {{ installed_cli_version | default('Not installed') }}
+          Latest:    {{ latest_cli_version }}
 
     - name: Determine if Cilium CLI needs installation or update
       ansible.builtin.set_fact:
         cilium_cli_needs_update: >-
           {{
-            cilium_cli_installed.rc != 0 or
-            (cilium_cli_installed.rc == 0 and
-            installed_cli_version != cli_ver.stdout)
+            (cilium_cli_installed.rc != 0) or
+            (cilium_cli_installed.rc == 0 and installed_cli_version != latest_cli_version)
           }}
 
     - name: Install or update Cilium CLI
@@ -71,6 +66,7 @@
           ansible.builtin.get_url:
             url: "{{ cilium_base_url }}/cilium-linux-{{ cli_arch }}{{ item }}"
             dest: /tmp/k3s/cilium-linux-{{ cli_arch }}{{ item }}
+            timeout: 60
             owner: root
             group: root
             mode: "0755"
@@ -78,7 +74,7 @@
             - .tar.gz
             - .tar.gz.sha256sum
           vars:
-            cilium_base_url: https://github.com/cilium/cilium-cli/releases/download/{{ cli_ver.stdout }}
+            cilium_base_url: https://github.com/cilium/cilium-cli/releases/download/{{ latest_cli_version }}
 
         - name: Verify the downloaded tarball
           ansible.builtin.shell: |
@@ -116,39 +112,35 @@
         msg: API endpoint {{ api_endpoint }} is not reachable
       when: api_test_result is failed
 
-    - name: Check if Cilium is already installed
-      ansible.builtin.command: >-
-        helm list -n {{ cilium_namespace | default('kube-system')}} --filter {{ cilium_repo_name }}
-      register: cilium_installed
-      failed_when: false
-      changed_when: false
-      ignore_errors: false
-
     - name: Add Cilium Helm repo
       kubernetes.core.helm_repository:
         name: "{{ cilium_repo_name }}"
         repo_url: "https://helm.cilium.io"
         state: present
 
-    - name: Get latest Cilium chart info from Helm repo
-      ansible.builtin.command: >
-        helm show chart {{ cilium_repo_name }}/{{ cilium_chart_name }}
-      register: helm_chart_info
+    - name: Get latest stable Cilium version
+      ansible.builtin.uri:
+        url: https://raw.githubusercontent.com/cilium/cilium/main/stable.txt
+        return_content: yes
+      register: cilium_ver_response
+      environment: "{{ proxy_env | default({}) }}"
+
+    - name: Set latest Cilium version fact
+      ansible.builtin.set_fact:
+        cilium_latest_version: "{{ cilium_ver_response.content | trim }}"
+
+    - name: Get installed Cilium release info
+      kubernetes.core.helm_info:
+        name: "{{ cilium_release_name }}"
+        release_namespace: "{{ cilium_namespace | default('kube-system')}}"
+      register: cilium_info
+      failed_when: false
       changed_when: false
 
-    - name: Parse chart version from Helm output
+    - name: Extract installed Cilium version
       ansible.builtin.set_fact:
-        cilium_latest_version: "{{ (helm_chart_info.stdout | from_yaml).version }}"
-
-    - name: Get installed Cilium version
-      ansible.builtin.set_fact:
-        installed_cilium_version: >-
-          {{
-            cilium_installed.stdout_lines[1].split()[8].split('-')[-1]
-            if cilium_installed.rc == 0 and cilium_installed.stdout_lines | length > 1
-            else 'none'
-          }}
-      when: cilium_installed.rc == 0 and cilium_installed.stdout_lines | length > 1
+        installed_cilium_version: "{{ cilium_info.release.chart.split('-')[-1] }}"
+      when: cilium_info.release is defined
 
     - name: Log Cilium installation status
       ansible.builtin.debug:
@@ -160,9 +152,8 @@
       ansible.builtin.set_fact:
         cilium_needs_install: >-
           {{
-            cilium_installed.rc != 0 or
-            cilium_installed.stdout_lines | length <= 1 or
-            installed_cilium_version != cilium_version | default(cilium_latest_version)
+            (cilium_info.release is not defined) or
+            (installed_cilium_version != (cilium_version | default(cilium_latest_version)))
           }}
 
     - name: Create Cilium values file

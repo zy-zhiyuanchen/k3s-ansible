@@ -55,17 +55,18 @@
         repo_url: "https://argoproj.github.io/argo-helm"
         state: present
 
-    - name: Download ArgoCD Helm repo index
+    - name: Get latest stable ArgoCD chart
       ansible.builtin.uri:
-        url: "https://argoproj.github.io/argo-helm/index.yaml"
-        return_content: true
-      register: helm_index
-      changed_when: false
+        url: https://raw.githubusercontent.com/argoproj/argo-helm/main/charts/argo-cd/Chart.yaml
+        return_content: yes
+        timeout: 60
+      register: argocd_chart_response
+      environment: "{{ proxy_env | default({}) }}"
 
-    - name: Extract latest chart version
+    - name: Set latest ArgoCD chart version fact
       ansible.builtin.set_fact:
-        argocd_latest_version: >-
-          {{ (helm_index.content | from_yaml).entries[argocd_chart_name][0].version }}
+        argo_latest_version: "{{ (argocd_chart_response.content | from_yaml).version }}"
+
 
     - name: Check if ArgoCD is already installed
       ansible.builtin.command: >-
