@@ -1,0 +1,14 @@
+server:
+  insecure: "{{ argocd_server_insecure | lower }}"
+  replicas: 1
+  service:
+    type: "{{ argocd_service_type | default('ClusterIP') }}"
+controller:
+  replicas: 1
+repoServer:
+  replicas: 1
+applicationSet:
+  replicas: 1
+configs:
+  secret:
+    argocdServerAdminPassword: "{{ admin_password | password_hash('bcrypt') }}"

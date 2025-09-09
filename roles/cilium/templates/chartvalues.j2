@@ -1,0 +1,36 @@
+# Cilium Helm Chart Values
+operator:
+  replicas: {{ cilium_operator_replicas | default(1) }}
+
+ipam:
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - {{ cluster_cidr }}
+
+{% if cilium_mode == "native" or (cilium_bgp and cilium_exportPodCIDR != 'false') %}
+ipv4NativeRoutingCIDR: {{ cluster_cidr }}
+{% endif %}
+
+k8sServiceHost: {{ api_endpoint | default('127.0.0.1') }}
+k8sServicePort: {{ api_port | default('6443') }}
+
+routingMode: {{ cilium_mode | default("") }}
+autoDirectNodeRoutes: {{ "true" if cilium_mode == "native" else "false" }}
+
+kubeProxyReplacement: {{ kube_proxy_replacement | default("false") }}
+
+bpf:
+  masquerade: {{ enable_bpf_masquerade | default(false) }}
+
+bgpControlPlane:
+  enabled: {{ cilium_bgp | default(false) }}
+
+hubble:
+  enabled: {{ cilium_hubble | default(false) }}
+  relay:
+    enabled: {{ cilium_hubble | default(false) }}
+  ui:
+    enabled: {{ cilium_hubble | default(false) }}
+    service:
+      type: {{ cilium_hubble_service_type | default('ClusterIP') }} 
+      nodePort: {{ cilium_hubble_ui_nodeport | default(30080) }}

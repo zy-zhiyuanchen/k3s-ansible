@@ -3,6 +3,7 @@ argocd_namespace: argocd
 argocd_service_type: ClusterIP
 argocd_admin_password: ""
 argocd_server_insecure: true
-helm_repo_name: argo
-helm_chart_name: argo-cd
+argocd_release_name: argocd
+argocd_repo_name: argo
+argocd_chart_name: argo-cd
 server_group: server  # noqa var-naming[no-role-prefix]

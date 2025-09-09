@@ -23,11 +23,14 @@ k3s_cluster:
     token: "token"
     api_endpoint: "{{ hostvars[groups['server'][0]]['ansible_host'] | default(groups['server'][0]) }}"
 
-    #vars for proxy settings if needed
+    # proxy settings if needed
     proxy_env:
       http_proxy: http://127.0.0.1:7890
       https_proxy: http://127.0.0.1:7890
       no_proxy: localhost,127.0.0.1
+
+    # merge proxy_env with KUBECONFIG for helm tasks
+    kubeconfig_env: "{{ proxy_env | default({}) | combine({'KUBECONFIG': '/home/{{ ansible_user }}/.kube/config'}) }}"
 
     # Optional vars
     # extra_server_args: ""
@@ -58,26 +61,30 @@ k3s_cluster:
     # argocd vars
     install_argocd: true
     argocd_version: 8.3.3 # ArgoCD version tag
+    argocd_release_name: argocd
     argocd_namespace: argocd
     argocd_admin_password: "{{ vault_argocd_password }}"  # leave empty to auto-generate, or set custom password
     argocd_server_insecure: true # set to false for TLS in production
 
 
     # ArgoCD UI and API configuration
-    argocd_server_insecure: true  # disable TLS for internal access
     argocd_enable_dex: false  # disable dex for single node setup
     argocd_repos_server_replicas: 1
 
     # LoadBalancer configuration (if using Cilium BGP or MetalLB)
-    argocd_service_type: LoadBalancer  # options: ClusterIP, NodePort, LoadBalancer
+    argocd_service_type: NodePort  # options: ClusterIP, NodePort, LoadBalancer
 
     
     # uncomment cilium_iface to use cilium cni instead of flannel or calico
     # ensure v4.19.57, v5.1.16, v5.2.0 or more recent kernel
+    # cilium_version: 1.18.1
+
     install_cilium: true
     cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
     cilium_tag: v1.18.1 # cilium version tag
     cilium_hubble: true # enable hubble observability relay and ui
+    cilium_hubble_service_type: NodePort
+    cilium_hubble_ui_nodeport: 30090
 
     # if using calico or cilium, you may specify the cluster pod cidr pool
     cluster_cidr: 10.42.0.0/16
