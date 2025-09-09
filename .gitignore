@@ -2,5 +2,6 @@ venv
 .venv
 .vscode
 .vagrant
+.vault_pass
 inventory-sample.yml
 playbook/debug.yml

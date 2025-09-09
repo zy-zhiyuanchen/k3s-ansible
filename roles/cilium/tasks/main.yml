@@ -185,7 +185,7 @@
         state: present
         atomic: true
         wait: true
-        timeout: "600s"
+        timeout: "300s"
         force: false
       register: cilium_helm_result
       when: cilium_needs_install

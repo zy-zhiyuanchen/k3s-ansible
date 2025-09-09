@@ -39,19 +39,6 @@
             path: /tmp/k3s/get_helm.sh
             state: absent
 
-    - name: Check if Helm diff is installed
-      ansible.builtin.command: helm diff
-      register: helm_diff_installed
-      failed_when: false
-      changed_when: false
-      ignore_errors: true
-      
-    - name: Install Helm diff plugin
-      when: helm_diff_installed.rc != 0
-      kubernetes.core.helm_plugin:
-        plugin_path: https://github.com/databus23/helm-diff
-        state: present
-
     - name: Wait for Kubernetes API endpoint
       ansible.builtin.wait_for:
         host: "{{ api_endpoint }}"
@@ -68,16 +55,17 @@
         repo_url: "https://argoproj.github.io/argo-helm"
         state: present
 
-    - name: Get latest ArgoCD chart info from Helm repo
-      ansible.builtin.command: >
-        helm show chart {{ argocd_repo_name }}/{{ argocd_chart_name }}
-      register: helm_chart_info
+    - name: Download ArgoCD Helm repo index
+      ansible.builtin.uri:
+        url: "https://argoproj.github.io/argo-helm/index.yaml"
+        return_content: true
+      register: helm_index
       changed_when: false
 
-    - name: Parse chart version from Helm output
+    - name: Extract latest chart version
       ansible.builtin.set_fact:
-        argocd_latest_version: "{{ (helm_chart_info.stdout | from_yaml).version }}"
-
+        argocd_latest_version: >-
+          {{ (helm_index.content | from_yaml).entries[argocd_chart_name][0].version }}
 
     - name: Check if ArgoCD is already installed
       ansible.builtin.command: >-
@@ -131,18 +119,6 @@
         mode: "0644"
       register: argocd_values_file
 
-    - name: Run helm diff using helm_plugin
-      ansible.builtin.shell: |
-        helm diff upgrade {{argocd_release_name}} {{ argocd_repo_name }}/{{ argocd_chart_name }} \
-          --namespace {{ argocd_namespace }} \
-          --values {{argocd_values_file.dest}} 
-      register: argocd_value_diff
-      failed_when: false
-
-    - name: Display helm diff errors
-      ansible.builtin.debug:
-        msg: "{{ argocd_value_diff.stderr }}"
-
     - name: Install or upgrade ArgoCD using Helm
       kubernetes.core.helm:
         name: "{{argocd_release_name}}"
@@ -155,11 +131,11 @@
         state: present
         atomic: true
         wait: true
-        timeout: "600s"
+        timeout: "300s"
         force: false  # Ensures upgrade runs even if no changes detected
         reset_values: false  # Keep existing values and merge with new ones
       register: argocd_install_result
-      when: argocd_needs_install or argocd_value_diff.stdout | length > 0
+      when: argocd_needs_install
 
     - name: Log ArgoCD installation/upgrade result
       ansible.builtin.debug:
@@ -167,6 +143,7 @@
           ArgoCD {{ 'installation' if (installed_argocd_version | default('none')) == 'none' else 'upgrade' }} completed successfully.
           Status: {{ argocd_install_result.status | default('Unknown') }}
           Revision: {{ argocd_install_result.revision | default('Unknown') }}
+      # when: argocd_install_result is defined and argocd_install_result.status is defined and argocd_install_result.status != "unchanged"
       when: argocd_install_result is defined and argocd_install_result.changed
 
     - name: Wait for argocd-application pods to be ready
@@ -209,6 +186,7 @@
           {% if generated_admin_password is defined %}
           Generated Admin Password: {{ generated_admin_password }}
           {% endif %}
+      # when: argocd_install_result is defined and argocd_install_result.status is defined and argocd_install_result.status != "unchanged"
       when: argocd_install_result is defined and argocd_install_result.changed
 
     - name: Clean up temporary files
