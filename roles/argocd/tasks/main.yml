@@ -43,7 +43,6 @@
       ansible.builtin.wait_for:
         host: "{{ api_endpoint }}"
         port: 6443
-        timeout: 60
         delay: 1
       register: api_test_result
       ignore_errors: true
@@ -59,7 +58,6 @@
       ansible.builtin.uri:
         url: https://raw.githubusercontent.com/argoproj/argo-helm/main/charts/argo-cd/Chart.yaml
         return_content: yes
-        timeout: 60
       register: argocd_chart_response
       environment: "{{ proxy_env | default({}) }}"
 
@@ -170,7 +168,7 @@
         wait_condition:
           type: Available
           status: "True"
-        wait_timeout: 300
+        wait_timeout: 30
       loop:
         - argocd-server
         - argocd-repo-server

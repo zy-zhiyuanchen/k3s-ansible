@@ -66,7 +66,6 @@
           ansible.builtin.get_url:
             url: "{{ cilium_base_url }}/cilium-linux-{{ cli_arch }}{{ item }}"
             dest: /tmp/k3s/cilium-linux-{{ cli_arch }}{{ item }}
-            timeout: 60
             owner: root
             group: root
             mode: "0755"
@@ -101,7 +100,6 @@
       ansible.builtin.wait_for:
         host: "{{ api_endpoint }}"
         port: 6443
-        timeout: 60
         delay: 1
       register: api_test_result
       ignore_errors: true
