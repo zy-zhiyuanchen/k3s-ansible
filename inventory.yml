@@ -83,15 +83,18 @@ k3s_cluster:
     cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
     cilium_tag: v1.18.1 # cilium version tag
     cilium_hubble: true # enable hubble observability relay and ui
-    cilium_hubble_service_type: NodePort
-    cilium_hubble_ui_nodeport: 30090
+    cilium_hubble_service_type: LoadBalancer
+    kube_proxy_replacement: true # enable cilium kube-proxy replacement
 
     # if using calico or cilium, you may specify the cluster pod cidr pool
     cluster_cidr: 10.42.0.0/16
     service_cidr: 10.43.0.0/16
     
+    # enable l2 announcements for cilium lb services
+    cilium_l2: true 
+
     # enable cilium bgp control plane for lb services and pod cidrs. disables metallb.
-    cilium_bgp: true
+    cilium_bgp: false
 
     # bgp parameters for cilium cni. only active when cilium_iface is defined and cilium_bgp is true.
     cilium_bgp_lb_cidr: 192.168.31.0/24 # cidr for cilium loadbalancer ipam

@@ -1,8 +1,9 @@
 cilium_release_name: cilium
 cilium_repo_name: cilium
 cilium_chart_name: cilium
-# cilium_version: 1.18.1
+cilium_version: 1.18.1
 
+cilium_l2: false
 cilium_bgp: false
 cilium_exportPodCIDR: true  # noqa var-naming
 cilium_bgp_lb_cidr: 192.168.31.0/24
@@ -13,8 +14,8 @@ cilium_hubble_ui_nodeport: 30090
 
 
 cluster_cidr: 10.42.0.0/16
-enable_bpf_masquerade: true
-kube_proxy_replacement: true
+enable_bpf_masquerade: false
+kube_proxy_replacement: false
 api_endpoint: 127.0.0.1
 api_port: 6443
 server_group: server  # noqa var-naming[no-role-prefix]

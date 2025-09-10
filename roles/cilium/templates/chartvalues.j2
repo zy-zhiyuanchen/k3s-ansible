@@ -7,6 +7,14 @@ ipam:
     clusterPoolIPv4PodCIDRList:
       - {{ cluster_cidr }}
 
+l2announcements：
+  enabled: {{ cilium_l2 | default(false)}}
+
+k8sClientRateLimit：
+  qps: {{ cilium_l2_qps | default(5) }}
+  burst: {{ cilium_l2_burst | default(10) }}
+
+
 {% if cilium_mode == "native" or (cilium_bgp and cilium_exportPodCIDR != 'false') %}
 ipv4NativeRoutingCIDR: {{ cluster_cidr }}
 {% endif %}
