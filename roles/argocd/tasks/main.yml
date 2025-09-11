@@ -111,7 +111,7 @@
 
     - name: Create ArgoCD values file
       ansible.builtin.template:
-        src: templates/chartvalues.j2
+        src: templates/argocd_values.j2
         dest: /tmp/k3s/argocd-values.yaml
         owner: root
         group: root

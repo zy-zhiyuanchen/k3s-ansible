@@ -7,16 +7,20 @@ ipam:
     clusterPoolIPv4PodCIDRList:
       - {{ cluster_cidr }}
 
-l2announcements：
+l2announcements:
   enabled: {{ cilium_l2 | default(false)}}
 
-k8sClientRateLimit：
-  qps: {{ cilium_l2_qps | default(5) }}
-  burst: {{ cilium_l2_burst | default(10) }}
+externalIPs:
+  enabled: {{ cilium_l2 | default(false)}}
 
+{% if cilium_l2 == "true" %}
+devices: {{ cilium_l2_interface | default("") }}
+{% endif %}
 
-{% if cilium_mode == "native" or (cilium_bgp and cilium_exportPodCIDR != 'false') %}
-ipv4NativeRoutingCIDR: {{ cluster_cidr }}
+{% if cilium_l2_qps is defined and cilium_l2_burst is defined %}
+k8sClientRateLimit:
+  qps: {{ cilium_l2_qps }}
+  burst: {{ cilium_l2_burst }}
 {% endif %}
 
 k8sServiceHost: {{ api_endpoint | default('127.0.0.1') }}
@@ -30,9 +34,6 @@ kubeProxyReplacement: {{ kube_proxy_replacement | default("false") }}
 bpf:
   masquerade: {{ enable_bpf_masquerade | default(false) }}
 
-bgpControlPlane:
-  enabled: {{ cilium_bgp | default(false) }}
-
 hubble:
   enabled: {{ cilium_hubble | default(false) }}
   relay:
@@ -41,4 +42,6 @@ hubble:
     enabled: {{ cilium_hubble | default(false) }}
     service:
       type: {{ cilium_hubble_service_type | default('ClusterIP') }} 
-      nodePort: {{ cilium_hubble_ui_nodeport | default(30080) }}
+{% if cilium_hubble_service_type == "NodePort" %}
+      nodePort: {{ cilium_hubble_ui_nodeport | default("") }}
+{% endif %}

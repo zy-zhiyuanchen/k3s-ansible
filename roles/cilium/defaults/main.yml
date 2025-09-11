@@ -4,9 +4,9 @@ cilium_chart_name: cilium
 cilium_version: 1.18.1
 
 cilium_l2: false
-cilium_bgp: false
-cilium_exportPodCIDR: true  # noqa var-naming
-cilium_bgp_lb_cidr: 192.168.31.0/24
+cilium_l2_interface: eth0
+cilium_exportPodCIDR: false
+cilium_lb_cidr: 192.168.31.0/24
 cilium_hubble: true
 cilium_mode: native
 cilium_hubble_service_type: NodePort

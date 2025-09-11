@@ -137,9 +137,9 @@
 
     - name: Extract installed Cilium version
       ansible.builtin.set_fact:
-        installed_cilium_version: "{{ cilium_info.release.chart.split('-')[-1] }}"
-      when: cilium_info.release is defined
-
+        installed_cilium_version: "{{ cilium_info.status.chart.split('-')[-1] }}"
+      when: cilium_info.status is defined
+      
     - name: Log Cilium installation status
       ansible.builtin.debug:
         msg: >
@@ -150,13 +150,13 @@
       ansible.builtin.set_fact:
         cilium_needs_install: >-
           {{
-            (cilium_info.release is not defined) or
+            (cilium_info.status.chart is not defined) or
             (installed_cilium_version != (cilium_version | default(cilium_latest_version)))
           }}
 
     - name: Create Cilium values file
       ansible.builtin.template:
-        src: templates/chartvalues.j2
+        src: templates/cilium_values.j2
         dest: /tmp/k3s/cilium-values.yaml
         owner: root
         group: root
@@ -220,27 +220,34 @@
         - hubble-ui
       when: cilium_hubble | default(false)
 
-    - name: Create CiliumLoadBalancerIPPool yaml file
-      ansible.builtin.template:
-        src: templates/cilium.crs.j2
-        dest: /tmp/k3s/cilium-values.yaml
-        owner: root
-        group: root
-        mode: "0644"
-
     - name: Set context for Cilium CLI
       ansible.builtin.command: cilium context --helm-release-name {{ cilium_release_name }} --helm-namespace {{ cilium_namespace | default('kube-system') }}
       failed_when: false
       changed_when: false
 
-    - name: Apply Cilium BGP configuration
-      when: cilium_bgp | default(false)
+    - name: Apply CiliumL2AnnouncementPolicy configuration
       kubernetes.core.k8s:
         state: present
-        definition: "{{ lookup('template', 'cilium.crs.j2') | from_yaml }}"
+        definition: "{{ lookup('template', 'cilium_l2_policy.j2') | from_yaml }}"
+      when: cilium_l2 | default(false)
 
-    - name: Verify BGP configuration
+    - name: Verify CiliumL2AnnouncementPolicy configuration
+      kubernetes.core.k8s_info:
+        api_version: cilium.io/v2alpha1
+        kind: CiliumL2AnnouncementPolicy
+      when: cilium_l2 | default(false)
+
+    - name: Apply    configuration
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'cilium_lb_pool.j2') | from_yaml }}"
+      when: cilium_l2
+
+    - name: Verify CiliumLoadBalancerIPPool configuration
       kubernetes.core.k8s_info:
         api_version: cilium.io/v2alpha1
         kind: CiliumLoadBalancerIPPool
-      when: cilium_bgp | default(false)
+      when: cilium_l2
+
+
+

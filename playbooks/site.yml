@@ -1,34 +1,34 @@
 ---
-# - name: Cluster prep
-#   hosts: k3s_cluster
-#   gather_facts: true
+- name: Cluster prep
+  hosts: k3s_cluster
+  gather_facts: true
+  become: true
+  roles:
+    - role: prereq
+    # - role: airgap
+    # - role: raspberrypi
+
+- name: Setup K3S server
+  hosts: server
+  become: true
+  roles:
+    - role: k3s_server
+  environment: "{{ kubeconfig_env }}"
+
+# - name: Setup K3S agent
+#   hosts: agent
 #   become: true
 #   roles:
-#     - role: prereq
-#     # - role: airgap
-#     # - role: raspberrypi
+#     - role: k3s_agent
 
-# - name: Setup K3S server
+
+# - name: Install/Upgrade Helm on K3S server
 #   hosts: server
 #   become: true
+#   vars:
+#     helm_force_upgrade: false
 #   roles:
-#     - role: k3s_server
-#   environment: "{{ kubeconfig_env }}"
-
-# # - name: Setup K3S agent
-# #   hosts: agent
-# #   become: true
-# #   roles:
-# #     - role: k3s_agent
-
-
-# # - name: Install/Upgrade Helm on K3S server
-# #   hosts: server
-# #   become: true
-# #   vars:
-# #     helm_force_upgrade: false
-# #   roles:
-# #     - role: helm
+#     - role: helm
 
 
 - name: Install/Upgrade Cilium on K3S server
