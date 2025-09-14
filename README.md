@@ -1,8 +1,10 @@
-# Build a Kubernetes cluster using K3s via Ansible
+# Automated k3s cluster via Ansible
 
-This project is based on [k3s-io/k3s-ansible](https://github.com/k3s-io/k3s-ansible)
+## Introduction
+
+This project is based on the work from official ansible project from k3s: [k3s-io/k3s-ansible](https://github.com/k3s-io/k3s-ansible). The default setting is for single server node k3s cluster and with http proxy settings.
 
 ## Added components
-- Cilium CNI and BGP control plane
+- Cilium CNI with kube-proxy replacement and with l2 announcement support
 - ArgoCD
 
