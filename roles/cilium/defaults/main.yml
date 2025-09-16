@@ -8,7 +8,7 @@ cilium_l2_interface: eth0
 cilium_exportPodCIDR: false
 cilium_lb_cidr: 192.168.31.0/24
 cilium_hubble: true
-cilium_mode: native
+cilium_mode: tunnel
 cilium_hubble_service_type: NodePort
 cilium_hubble_ui_nodeport: 30090
 

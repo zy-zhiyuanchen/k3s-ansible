@@ -23,10 +23,14 @@ k8sClientRateLimit:
   burst: {{ cilium_l2_burst }}
 {% endif %}
 
+{% if cilium_mode == "native" %}
+ipv4NativeRoutingCIDR: {{ cluster_cidr }}
+{% endif %}
+
 k8sServiceHost: {{ api_endpoint | default('127.0.0.1') }}
 k8sServicePort: {{ api_port | default('6443') }}
 
-routingMode: {{ cilium_mode | default("") }}
+routingMode: {{ cilium_mode | default("tunnel") }}
 autoDirectNodeRoutes: {{ "true" if cilium_mode == "native" else "false" }}
 
 kubeProxyReplacement: {{ kube_proxy_replacement | default("false") }}

@@ -80,7 +80,7 @@ k3s_cluster:
     # cilium_version: 1.18.1
 
     install_cilium: true
-    cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
+    # cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
     cilium_version: 1.18.1 # cilium version tag
     cilium_hubble: true # enable hubble observability relay and ui
     cilium_hubble_service_type: NodePort
