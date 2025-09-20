@@ -10,5 +10,7 @@ repoServer:
 applicationSet:
   replicas: 1
 configs:
+  cm:
+    {{ kustomize_enablehelm | default('') }}
   secret:
     argocdServerAdminPassword: "{{ admin_password | password_hash('bcrypt') }}"
