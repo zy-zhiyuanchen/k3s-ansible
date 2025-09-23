@@ -2,9 +2,12 @@
 
 ## Introduction
 
-This project is based on the work from official ansible project from k3s: [k3s-io/k3s-ansible](https://github.com/k3s-io/k3s-ansible). The default setting is for single server node k3s cluster and with http proxy settings.
+This project is based on the work from official ansible project from k3s: [k3s-io/k3s-ansible](https://github.com/k3s-io/k3s-ansible). The default setting is for single server node k3s cluster.
 
-## Added components
-- Cilium CNI with kube-proxy replacement and with l2 announcement support
-- ArgoCD
+## Components
+- Cilium CNI installation via helm
+- CIlium kube-proxy replacement
+- Cilium hubble
+- CIlium BGP support, peer Cilium node with Router and advertise LB type svcs in LAN, peer IP address auto-discovery.
+- ArgoCD installation via helm
 
