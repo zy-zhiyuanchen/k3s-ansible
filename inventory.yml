@@ -3,7 +3,7 @@ k3s_cluster:
   children:
     server:
       hosts:
-        192.168.199.192:
+        192.168.2.119:
     # agent:
     #   hosts:
     #     192.16.35.12:
@@ -24,10 +24,10 @@ k3s_cluster:
     api_endpoint: "{{ hostvars[groups['server'][0]]['ansible_host'] | default(groups['server'][0]) }}"
 
     # proxy settings if needed
-    proxy_env:
-      http_proxy: http://127.0.0.1:7890
-      https_proxy: http://127.0.0.1:7890
-      no_proxy: localhost,127.0.0.1
+    # proxy_env:
+    #   http_proxy: http://127.0.0.1:7890
+    #   https_proxy: http://127.0.0.1:7890
+    #   no_proxy: localhost,127.0.0.1
 
     # merge proxy_env with KUBECONFIG for helm tasks
     kubeconfig_env: "{{ proxy_env | default({}) | combine({'KUBECONFIG': '/home/{{ ansible_user }}/.kube/config'}) }}"
@@ -72,30 +72,30 @@ k3s_cluster:
     argocd_repos_server_replicas: 1
 
     # LoadBalancer configuration (if using Cilium BGP or MetalLB)
-    argocd_service_type: NodePort  # options: ClusterIP, NodePort, LoadBalancer
+    argocd_service_type: LoadBalancer  # options: ClusterIP, NodePort, LoadBalancer
 
     
     # uncomment cilium_iface to use cilium cni instead of flannel or calico
     # ensure v4.19.57, v5.1.16, v5.2.0 or more recent kernel
     # cilium_version: 1.18.1
-
+    
     install_cilium: true
     # cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
     cilium_version: 1.18.1 # cilium version tag
+
+    cilium_bgp: true
+    cilium_bgp_advertise_svc: true
+    cilium_bgp_local_asn: 65000
+    cilium_bgp_peer_asn: 65001
+    cilium_bgp_lb_cidr: 192.168.31.0/24
+
     cilium_hubble: true # enable hubble observability relay and ui
-    cilium_hubble_service_type: NodePort
+    cilium_hubble_service_type: LoadBalancer
     kube_proxy_replacement: true # enable cilium kube-proxy replacement
 
     # if using cilium, you may specify the cluster pod cidr pool
     cluster_cidr: 10.42.0.0/16
     service_cidr: 10.43.0.0/16
-    
-    # enable l2 announcements for cilium lb services
-    cilium_l2: false 
-    cilium_l2_interface: eth+ # ^wlp[0-9].* # interface to use for l2 announcements, regex supported
-
-    # lb ipam cidr for loadbalancer services
-    cilium_lb_cidr: 192.168.31.0/24 # cidr for cilium loadbalancer ipam
 
     # K3s configuration with custom network settings and disabled components
     server_config_yaml: |

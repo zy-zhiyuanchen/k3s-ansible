@@ -225,29 +225,23 @@
       failed_when: false
       changed_when: false
 
-    - name: Apply CiliumL2AnnouncementPolicy configuration
+    - name: Patch Hubble UI Service with BGP label
+      kubernetes.core.k8s:
+        state: patched
+        kind: Service
+        namespace: kube-system
+        name: hubble-ui
+        definition:
+          metadata:
+            labels:
+              bgp: "public"
+      when: cilium_hubble | default(false) and cilium_bgp | default(false)
+
+    - name: Apply BGP configurations
       kubernetes.core.k8s:
         state: present
-        definition: "{{ lookup('template', 'cilium_l2_policy.j2') | from_yaml }}"
-      when: cilium_l2 | default(false)
-
-    - name: Verify CiliumL2AnnouncementPolicy configuration
-      kubernetes.core.k8s_info:
-        api_version: cilium.io/v2alpha1
-        kind: CiliumL2AnnouncementPolicy
-      when: cilium_l2 | default(false)
-
-    - name: Apply    configuration
-      kubernetes.core.k8s:
-        state: present
-        definition: "{{ lookup('template', 'cilium_lb_pool.j2') | from_yaml }}"
-      when: cilium_l2
-
-    - name: Verify CiliumLoadBalancerIPPool configuration
-      kubernetes.core.k8s_info:
-        api_version: cilium.io/v2alpha1
-        kind: CiliumLoadBalancerIPPool
-      when: cilium_l2
+        definition: "{{ lookup('template', 'cilium_bgp.j2') | from_yaml_all }}"
+      when: cilium_bgp | default(false)
 
 
 

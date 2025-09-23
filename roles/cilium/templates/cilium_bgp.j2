@@ -1,0 +1,75 @@
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: cilium-bgp-cluster
+spec:
+  bgpInstances:
+    - name: cilium-bgp
+      localASN: {{ cilium_bgp_local_asn }}
+      peers:
+        - name: router
+          peerASN: {{ cilium_bgp_peer_asn }}
+          autoDiscovery:
+            mode: "DefaultGateway"
+            defaultGateway:
+              addressFamily: ipv4
+          peerConfigRef:
+            name: cilium-peer-config
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: cilium-peer-config
+spec:
+  timers:
+    holdTimeSeconds: 9
+    keepAliveTimeSeconds: 3
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 15
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: "bgp"
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: cilium-lb-ip-pool
+  labels:
+    bgp: "public"
+spec:
+  blocks:
+{% if "/" in cilium_bgp_lb_cidr %}
+    - cidr: {{ cilium_bgp_lb_cidr }}
+{% else %}
+    - start: {{ cilium_bgp_lb_cidr.split('-')[0] }}
+      stop: {{ cilium_bgp_lb_cidr.split('-')[1] }}
+{% endif %}
+
+---
+
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: cilium-bgp-advertisement
+  labels:
+    advertise: "bgp"
+spec:
+  advertisements:
+{% if cilium_bgp_advertise_svc %}
+    - advertisementType: "Service"
+      service:
+        addresses: 
+          - LoadBalancerIP
+      attributes:
+        communities:
+          standard: ["{{ cilium_bgp_peer_asn }}"]
+      selector:
+        matchLabels:
+          bgp: "public"
+{% endif %}

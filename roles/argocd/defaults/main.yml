@@ -8,3 +8,4 @@ argocd_repo_name: argo
 argocd_chart_name: argo-cd
 server_group: server  # noqa var-naming[no-role-prefix]
 kustomize_enablehelm: "kustomize.buildOptions: --enable-helm"
+cilium_bgp: false

@@ -3,14 +3,17 @@ cilium_repo_name: cilium
 cilium_chart_name: cilium
 cilium_version: 1.18.1
 
-cilium_l2: false
-cilium_l2_interface: eth0
-cilium_exportPodCIDR: false
-cilium_lb_cidr: 192.168.31.0/24
+
+cilium_bgp: false
+cilium_bgp_advertise_svc: false
+cilium_bgp_local_asn: 65000
+cilium_bgp_peer_asn: 65001
+cilium_bgp_lb_cidr: 192.168.31.0/24
+
+
 cilium_hubble: true
-cilium_mode: tunnel
-cilium_hubble_service_type: NodePort
-cilium_hubble_ui_nodeport: 30090
+cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
+cilium_hubble_service_type: ClusterIP
 
 
 cluster_cidr: 10.42.0.0/16
