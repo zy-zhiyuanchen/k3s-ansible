@@ -23,8 +23,9 @@ metadata:
   name: cilium-peer-config
 spec:
   timers:
-    holdTimeSeconds: 9
-    keepAliveTimeSeconds: 3
+    connectRetryTimeSeconds: 120
+    holdTimeSeconds: 90
+    keepAliveTimeSeconds: 30
   gracefulRestart:
     enabled: true
     restartTimeSeconds: 15
