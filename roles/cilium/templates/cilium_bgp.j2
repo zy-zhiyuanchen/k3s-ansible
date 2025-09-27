@@ -23,7 +23,7 @@ metadata:
   name: cilium-peer-config
 spec:
   timers:
-    connectRetryTimeSeconds: 120
+    connectRetryTimeSeconds: 5
     holdTimeSeconds: 90
     keepAliveTimeSeconds: 30
   gracefulRestart:
@@ -71,6 +71,9 @@ spec:
         communities:
           standard: ["{{ cilium_bgp_peer_asn }}"]
       selector:
-        matchLabels:
-          bgp: "public"
+        matchExpressions:
+          - key: thisFakeSelector
+            operator: NotIn
+            values:
+              - will-match-and-announce-all-services
 {% endif %}

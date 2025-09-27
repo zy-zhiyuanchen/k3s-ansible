@@ -188,18 +188,6 @@
       # when: argocd_install_result is defined and argocd_install_result.status is defined and argocd_install_result.status != "unchanged"
       when: argocd_install_result is defined and argocd_install_result.changed
 
-    - name: Patch ArgoCD Service with BGP label
-      kubernetes.core.k8s:
-        state: patched
-        kind: Service
-        namespace: "{{ argocd_namespace }}"
-        name: "{{ argocd_release_name ~ '-server' }}"
-        definition:
-          metadata:
-            labels:
-              bgp: "public"
-      when: cilium_bgp | default(false)
-
     - name: Clean up temporary files
       ansible.builtin.file:
         path: /tmp/k3s

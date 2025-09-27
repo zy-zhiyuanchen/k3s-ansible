@@ -225,18 +225,6 @@
       failed_when: false
       changed_when: false
 
-    - name: Patch Hubble UI Service with BGP label
-      kubernetes.core.k8s:
-        state: patched
-        kind: Service
-        namespace: kube-system
-        name: hubble-ui
-        definition:
-          metadata:
-            labels:
-              bgp: "public"
-      when: cilium_hubble | default(false) and cilium_bgp | default(false)
-
     - name: Apply BGP configurations
       kubernetes.core.k8s:
         state: present
