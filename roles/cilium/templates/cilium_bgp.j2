@@ -23,12 +23,12 @@ metadata:
   name: cilium-peer-config
 spec:
   timers:
-    connectRetryTimeSeconds: 5
-    holdTimeSeconds: 90
-    keepAliveTimeSeconds: 30
+    connectRetryTimeSeconds: 10
+    holdTimeSeconds: 300
+    keepAliveTimeSeconds: 100
   gracefulRestart:
     enabled: true
-    restartTimeSeconds: 15
+    restartTimeSeconds: 300
   families:
     - afi: ipv4
       safi: unicast
