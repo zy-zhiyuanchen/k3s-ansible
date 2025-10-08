@@ -131,8 +131,8 @@
         atomic: true
         wait: true
         timeout: "300s"
-        force: false  # Ensures upgrade runs even if no changes detected
-        reset_values: false  # Keep existing values and merge with new ones
+        force: false
+        update_repo_cache: true
       register: argocd_install_result
       when: argocd_needs_install
 

@@ -176,6 +176,7 @@
         wait: true
         timeout: "300s"
         force: false
+        update_repo_cache: true
       register: cilium_helm_result
       when: cilium_needs_install
 
@@ -190,7 +191,7 @@
         wait_condition:
           type: Ready
           status: "True"
-        wait_timeout: 30
+        wait_timeout: 300
 
     - name: Wait for Cilium operator to be ready
       kubernetes.core.k8s_info:
@@ -202,7 +203,7 @@
         wait_condition:
           type: Available
           status: "True"
-        wait_timeout: 30
+        wait_timeout: 300
 
     - name: Wait for Hubble components (if enabled)
       kubernetes.core.k8s_info:

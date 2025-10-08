@@ -13,7 +13,7 @@ k3s_cluster:
   vars:
     ansible_port: 22
     ansible_user: czy
-    k3s_version: v1.33.4+k3s1
+    k3s_version: v1.34.1+k3s1
     # The token should be a random string of reasonable length. You can generate
     # one with the following commands:
     # - openssl rand -base64 64
@@ -47,7 +47,6 @@ k3s_cluster:
     # List of locally available manifests to apply to the cluster, useful for PVCs or Traefik modifications.
     # extra_manifests: [ '/path/to/manifest1.yaml', '/path/to/manifest2.yaml' ]
     # airgap_dir: /tmp/k3s-airgap-images
-
     
     # valted argocd password by ansible-vault
     vault_argocd_password: !vault |
@@ -81,7 +80,7 @@ k3s_cluster:
     
     install_cilium: true
     # cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
-    cilium_version: 1.18.1 # cilium version tag
+    cilium_version: 1.18.2 # cilium version tag
 
     cilium_bgp: true
     cilium_bgp_advertise_svc: true

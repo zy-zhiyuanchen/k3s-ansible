@@ -29,6 +29,8 @@
     - role: cilium
       when: install_cilium | default(false)
   environment: "{{ kubeconfig_env }}"
+  tags: 
+    - cilium
 
 - name: Install/Upgrade Argocd on K3S server
   hosts: server
@@ -37,4 +39,6 @@
     - role: argocd
       when: install_argocd | default(false)
   environment: "{{ kubeconfig_env }}"
+  tags: 
+    - argocd
   
