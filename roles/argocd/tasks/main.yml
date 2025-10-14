@@ -67,71 +67,47 @@
 
 
     - name: Check if ArgoCD is already installed
-      ansible.builtin.command: >-
-        helm list -n {{ argocd_namespace }} --filter {{ argocd_repo_name }}
-      register: argocd_installed
+      ansible.builtin.command: "helm list -n {{ argocd_namespace }} --filter '^{{ argocd_release_name }}$' -o json"
+      register: argocd_installed_json
       failed_when: false
       changed_when: false
-      ignore_errors: false
 
-    - name: Get installed ArgoCD version
+    - name: Set ArgoCD installation facts
       ansible.builtin.set_fact:
-        installed_argocd_version: >-
-          {{
-            argocd_installed.stdout_lines[1].split()[8].split('-')[-1]
-            if argocd_installed.rc == 0 and argocd_installed.stdout_lines | length > 1
-            else 'none'
-          }}
-      when: argocd_installed.rc == 0 and argocd_installed.stdout_lines | length > 1
+        argocd_release_info: "{{ (argocd_installed_json.stdout | from_json) | default([]) }}"
+
+    - name: Set installed ArgoCD version and installation status
+      ansible.builtin.set_fact:
+        installed_argocd_version: "{{ (argocd_release_info | first).chart.split('-')[-1] if argocd_release_info else 'none' }}"
+        argocd_is_installed: "{{ argocd_release_info | length > 0 }}"
 
     - name: Log ArgoCD installation status
       ansible.builtin.debug:
         msg: >
           Installed ArgoCD version: {{ installed_argocd_version | default('Not installed') }},
-          Target ArgoCD version: {{ argocd_version | default(argocd_latest_version) }}
+          Target ArgoCD version: {{ argocd_version | default(argo_latest_version) }}
 
     - name: Determine if ArgoCD needs installation or upgrade
       ansible.builtin.set_fact:
-        argocd_needs_install: >-
-          {{
-            argocd_installed.rc != 0 or
-            argocd_installed.stdout_lines | length <= 1 or
-            installed_argocd_version != argocd_version | default(argocd_latest_version)
-          }}
+        argocd_needs_install: "{{ not argocd_is_installed or installed_argocd_version != (argocd_version | default(argo_latest_version)) }}"
 
     - name: Generate ArgoCD admin password if not provided
       ansible.builtin.set_fact:
         generated_admin_password: "{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"
-      when: argocd_admin_password is not defined or argocd_admin_password == ""
+      when: (argocd_admin_password is not defined or argocd_admin_password == "") and argocd_needs_install
 
     - name: Set admin password variable
       ansible.builtin.set_fact:
         admin_password: "{{ argocd_admin_password if (argocd_admin_password is defined and argocd_admin_password != '') else generated_admin_password }}"
-
-
-    - name: Construct final ArgoCD Helm values
-      ansible.builtin.set_fact:
-        argocd_helm_values: >-
-          {{
-            argocd_helm_values_base | combine(
-              {
-                'configs': {
-                  'secret': {
-                    'argocdServerAdminPassword': admin_password | password_hash('bcrypt')
-                  }
-                }
-              },
-              recursive=True
-            )
-          }}
-
+      when: argocd_needs_install
+    
     - name: Install or upgrade ArgoCD using Helm
       kubernetes.core.helm:
-        name: "{{argocd_release_name}}"
+        name: "{{ argocd_release_name }}"
         chart_ref: "{{ argocd_repo_name }}/{{ argocd_chart_name }}"
         release_namespace: "{{ argocd_namespace }}"
         create_namespace: true
-        chart_version: "{{ argocd_version }}"
+        chart_version: "{{ argocd_version | default(argo_latest_version, true) }}"
         values: "{{ argocd_helm_values }}"
         state: present
         atomic: true
@@ -146,12 +122,6 @@
       ansible.builtin.debug:
         msg: |
           ArgoCD {{ 'installation' if (installed_argocd_version | default('none')) == 'none' else 'upgrade' }} completed successfully.
-   
-      when: argocd_install_result is defined and argocd_install_result.changed
-
-    - name: Wait for argocd-server deployment to be available
-     
-      # when: argocd_install_result is defined and argocd_install_result.status is defined and argocd_install_result.status != "unchanged"
       when: argocd_install_result is defined and argocd_install_result.changed
 
     - name: Wait for argocd-application pods to be ready
@@ -166,8 +136,9 @@
           type: Ready
           status: "True"
         wait_timeout: 30
+      when: argocd_install_result is defined and argocd_install_result.changed
 
-    - name: Wait for Cilium operator to be ready
+    - name: Wait for ArgoCD deployments to be available
       kubernetes.core.k8s_info:
         api_version: apps/v1
         kind: Deployment
@@ -182,7 +153,7 @@
         - argocd-server
         - argocd-repo-server
         - argocd-applicationset-controller
-      when: cilium_hubble | default(false)
+      when: argocd_install_result is defined and argocd_install_result.changed
 
     - name: Display ArgoCD access information
       ansible.builtin.debug:

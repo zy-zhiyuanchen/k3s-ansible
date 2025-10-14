@@ -2,6 +2,7 @@ cilium_release_name: cilium
 cilium_repo_name: cilium
 cilium_chart_name: cilium
 cilium_version: 1.18.1
+cilium_namespace: kube-system
 
 
 cilium_bgp: false

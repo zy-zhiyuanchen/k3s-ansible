@@ -1,5 +1,9 @@
 # Makefile for k3s-ansible
 
+# Prevent accidental target matching from sub-commands
+%:
+	@:
+
 # Default Ansible configuration
 ANSIBLE_PLAYBOOK := ansible-playbook
 INVENTORY      := -i inventory.yml
