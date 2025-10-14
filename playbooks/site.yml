@@ -40,7 +40,7 @@
       when: install_certmanager | default(false)
   environment: "{{ kubeconfig_env }}"
   tags: 
-    - certmgr
+    - certmanager
 
 - name: Install/Upgrade Argocd on K3S server
   hosts: server

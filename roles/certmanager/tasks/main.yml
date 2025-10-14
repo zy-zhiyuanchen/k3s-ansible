@@ -33,7 +33,3 @@
           status: "True"
         wait_timeout: 300
 
-    - name: Create Self-Signed ClusterIssuer
-      kubernetes.core.k8s:
-        state: present
-        definition: "{{ lookup('template', 'selfsigned_issuer.j2') | from_yaml }}"

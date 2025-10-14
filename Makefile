@@ -30,7 +30,7 @@ help:
 	@echo ""
 	@echo "Available site targets:"
 	@echo "  site cilium   - Run the site playbook with the 'cilium' tag."
-	@echo "  site certmgr   - Run the site playbook with the 'certmgr' tag."
+	@echo "  site certmanager   - Run the site playbook with the 'certmanager' tag."
 	@echo "  site argocd   - Run the site playbook with the 'argocd' tag."
 	@echo ""
 	@echo "Example with extra arguments:"
