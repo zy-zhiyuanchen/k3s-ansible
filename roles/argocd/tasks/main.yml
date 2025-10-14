@@ -109,14 +109,21 @@
         admin_password: "{{ argocd_admin_password if (argocd_admin_password is defined and argocd_admin_password != '') else generated_admin_password }}"
 
 
-    - name: Create ArgoCD values file
-      ansible.builtin.template:
-        src: templates/argocd_values.j2
-        dest: /tmp/k3s/argocd-values.yaml
-        owner: root
-        group: root
-        mode: "0644"
-      register: argocd_values_file
+    - name: Construct final ArgoCD Helm values
+      ansible.builtin.set_fact:
+        argocd_helm_values: >-
+          {{
+            argocd_helm_values_base | combine(
+              {
+                'configs': {
+                  'secret': {
+                    'argocdServerAdminPassword': admin_password | password_hash('bcrypt')
+                  }
+                }
+              },
+              recursive=True
+            )
+          }}
 
     - name: Install or upgrade ArgoCD using Helm
       kubernetes.core.helm:
@@ -125,8 +132,7 @@
         release_namespace: "{{ argocd_namespace }}"
         create_namespace: true
         chart_version: "{{ argocd_version }}"
-        values_files: 
-          - "{{argocd_values_file.dest}}"
+        values: "{{ argocd_helm_values }}"
         state: present
         atomic: true
         wait: true
@@ -140,8 +146,11 @@
       ansible.builtin.debug:
         msg: |
           ArgoCD {{ 'installation' if (installed_argocd_version | default('none')) == 'none' else 'upgrade' }} completed successfully.
-          Status: {{ argocd_install_result.status | default('Unknown') }}
-          Revision: {{ argocd_install_result.revision | default('Unknown') }}
+   
+      when: argocd_install_result is defined and argocd_install_result.changed
+
+    - name: Wait for argocd-server deployment to be available
+     
       # when: argocd_install_result is defined and argocd_install_result.status is defined and argocd_install_result.status != "unchanged"
       when: argocd_install_result is defined and argocd_install_result.changed
 
@@ -192,4 +201,4 @@
       ansible.builtin.file:
         path: /tmp/k3s
         state: absent
-      when: false  # Keep temp directory for credentials file
+      when: false  # Keep temp directory for credentials filefalse  # Keep temp directory for credentials filese  # Keep temp directory for credentials file

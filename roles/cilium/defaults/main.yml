@@ -22,3 +22,37 @@ kube_proxy_replacement: false
 api_endpoint: 127.0.0.1
 api_port: 6443
 server_group: server  # noqa var-naming[no-role-prefix]
+
+# New variables for Helm values
+cilium_operator_replicas: 1
+cilium_exportPodCIDR: "false"
+
+cilium_helm_values:
+  operator:
+    replicas: "{{ cilium_operator_replicas }}"
+  ipam:
+    operator:
+      clusterPoolIPv4PodCIDRList:
+        - "{{ cluster_cidr }}"
+  ipv4NativeRoutingCIDR: >-
+    {{
+      cluster_cidr if (cilium_mode == "native" or (cilium_bgp and cilium_exportPodCIDR != 'false'))
+      else omit
+    }}
+  k8sServiceHost: "{{ api_endpoint }}"
+  k8sServicePort: "{{ api_port }}"
+  bgpControlPlane:
+    enabled: "{{ cilium_bgp }}"
+  routingMode: "{{ cilium_mode }}"
+  autoDirectNodeRoutes: "{{ true if cilium_mode == 'native' else false }}"
+  kubeProxyReplacement: "{{ kube_proxy_replacement }}"
+  bpf:
+    masquerade: "{{ enable_bpf_masquerade }}"
+  hubble:
+    enabled: "{{ cilium_hubble }}"
+    relay:
+      enabled: "{{ cilium_hubble }}"
+    ui:
+      enabled: "{{ cilium_hubble }}"
+      service:
+        type: "{{ cilium_hubble_service_type }}"

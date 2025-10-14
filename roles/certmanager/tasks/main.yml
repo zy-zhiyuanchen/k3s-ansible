@@ -1,0 +1,39 @@
+---
+- name: Install and configure cert-manager for Private CA
+  when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
+  run_once: true
+  block:
+    - name: Add Jetstack Helm repository
+      kubernetes.core.helm_repository:
+        name: "{{ cert_manager_repo_name }}"
+        repo_url: "{{ cert_manager_repo_url }}"
+        state: present
+
+    - name: Install cert-manager Helm chart
+      kubernetes.core.helm:
+        name: "{{ cert_manager_release_name }}"
+        chart_ref: "{{ cert_manager_repo_name }}/cert-manager"
+        release_namespace: "{{ cert_manager_namespace }}"
+        chart_version: "{{ cert_manager_chart_version }}"
+        create_namespace: true
+        state: present
+        update_repo_cache: true
+        values: "{{ cert_manager_helm_values }}"
+
+    - name: Wait for cert-manager pods to be ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ cert_manager_namespace }}"
+        label_selectors:
+          - app.kubernetes.io/instance=cert-manager
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+
+    - name: Create Self-Signed ClusterIssuer
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'selfsigned_issuer.j2') | from_yaml }}"

@@ -154,14 +154,6 @@
             (installed_cilium_version != (cilium_version | default(cilium_latest_version)))
           }}
 
-    - name: Create Cilium values file
-      ansible.builtin.template:
-        src: templates/cilium_values.j2
-        dest: /tmp/k3s/cilium-values.yaml
-        owner: root
-        group: root
-        mode: "0644"
-      
     - name: Install or upgrade Cilium using Helm
       kubernetes.core.helm:
         name: "{{ cilium_release_name }}"
@@ -169,8 +161,7 @@
         release_namespace: "{{ cilium_namespace | default('kube-system')}}"
         chart_version: "{{ cilium_version | default(cilium_latest_version) }}"
         create_namespace: true
-        values_files:
-          - /tmp/k3s/cilium-values.yaml
+        values: "{{ cilium_helm_values }}"
         state: present
         atomic: true
         wait: true
