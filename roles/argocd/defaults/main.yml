@@ -1,3 +1,4 @@
+---
 argocd_version: 8.3.3
 argocd_namespace: argocd
 argocd_service_type: LoadBalancer
@@ -6,8 +7,8 @@ argocd_server_insecure: true
 argocd_release_name: argocd
 argocd_repo_name: argo
 argocd_chart_name: argo-cd
-server_group: server  # noqa var-naming[no-role-prefix]
-kustomize_enablehelm: 
+server_group: server # noqa var-naming[no-role-prefix]
+kustomize_enablehelm:
   kustomize.buildOptions: --enable-helm
 cilium_bgp: false
 

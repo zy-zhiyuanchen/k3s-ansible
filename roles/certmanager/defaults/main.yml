@@ -1,3 +1,4 @@
+---
 # cert-manager settings
 cert_manager_chart_version: "v1.19.0"
 cert_manager_namespace: "cert-manager"

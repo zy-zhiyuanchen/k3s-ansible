@@ -21,7 +21,6 @@
 #   roles:
 #     - role: k3s_agent
 
-
 - name: Install/Upgrade Cilium on K3S server
   hosts: server
   become: true
@@ -29,7 +28,7 @@
     - role: cilium
       when: install_cilium | default(false)
   environment: "{{ kubeconfig_env }}"
-  tags: 
+  tags:
     - cilium
 
 - name: Install/Upgrade Cert-Manager on K3S server
@@ -39,7 +38,7 @@
     - role: certmanager
       when: install_certmanager | default(false)
   environment: "{{ kubeconfig_env }}"
-  tags: 
+  tags:
     - certmanager
 
 - name: Install/Upgrade Argocd on K3S server
@@ -49,6 +48,5 @@
     - role: argocd
       when: install_argocd | default(false)
   environment: "{{ kubeconfig_env }}"
-  tags: 
+  tags:
     - argocd
-  

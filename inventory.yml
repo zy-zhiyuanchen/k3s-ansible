@@ -4,10 +4,10 @@ k3s_cluster:
     server:
       hosts:
         192.168.2.119:
-    # agent:
-    #   hosts:
-    #     192.16.35.12:
-    #     192.16.35.13:
+  # agent:
+  #   hosts:
+  #     192.16.35.12:
+  #     192.16.35.13:
 
   # Required Vars
   vars:
@@ -47,18 +47,17 @@ k3s_cluster:
     # List of locally available manifests to apply to the cluster, useful for PVCs or Traefik modifications.
     # extra_manifests: [ '/path/to/manifest1.yaml', '/path/to/manifest2.yaml' ]
     # airgap_dir: /tmp/k3s-airgap-images
-    
+
     # Bools for core components to install
     install_cilium: true
     install_certmgr: true
     install_argocd: true
-    
 
     # uncomment cilium_iface to use cilium cni instead of flannel or calico
     # ensure v4.19.57, v5.1.16, v5.2.0 or more recent kernel
     # cilium_version: 1.18.1
-    
-    # cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
+
+    cilium_mode: native # native when nodes on same subnet or using bgp, else set routed
     cilium_version: 1.18.2 # cilium version tag
 
     cilium_bgp: true
@@ -87,28 +86,26 @@ k3s_cluster:
       disable-network-policy: true
       disable-kube-proxy: true
 
-    
+
     # argocd vars
     # valted argocd password by ansible-vault
     vault_argocd_password: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          31353761323831326461613838633037336634333739633137636237333561393434313165323833
-          3365653731303164633732376563373936393666646330340a633535633433656133376434376138
-          65376534643936623735386463653564306133303731336337363531306231613932373038336239
-          6462646565643938360a396265616165653439643663383361646362623033376137313935663662
-          3964
-        
-    argocd_version: 8.5.6 # ArgoCD version tag
-    argocd_admin_password: "{{ vault_argocd_password }}"  # leave empty to auto-generate, or set custom password
+      $ANSIBLE_VAULT;1.1;AES256
+      31353761323831326461613838633037336634333739633137636237333561393434313165323833
+      3365653731303164633732376563373936393666646330340a633535633433656133376434376138
+      65376534643936623735386463653564306133303731336337363531306231613932373038336239
+      6462646565643938360a396265616165653439643663383361646362623033376137313935663662
+      3964
 
+    argocd_version: 8.5.6 # ArgoCD version tag
+    argocd_admin_password: "{{ vault_argocd_password }}" # leave empty to auto-generate, or set custom password
 
     # ArgoCD UI and API configuration
-    argocd_enable_dex: false  # disable dex for single node setup
+    argocd_enable_dex: false # disable dex for single node setup
     argocd_repos_server_replicas: 1
 
     # LoadBalancer configuration (if using Cilium BGP or MetalLB)
-    argocd_service_type: LoadBalancer  # options: ClusterIP, NodePort, LoadBalancer
-
+    argocd_service_type: LoadBalancer # options: ClusterIP, NodePort, LoadBalancer
 
     # server_config_yaml:  |
     #   This is now an inner yaml file. Maintain the indentation.

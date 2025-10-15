@@ -16,7 +16,7 @@
       register: cilium_cli_installed
       changed_when: false
       ignore_errors: true
-    
+
     - name: Check for Cilium CLI version in command output
       ansible.builtin.set_fact:
         installed_cli_version: >-
@@ -30,14 +30,14 @@
     - name: Get latest stable Cilium CLI version
       ansible.builtin.uri:
         url: https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt
-        return_content: yes
+        return_content: true
       register: cli_ver_response
       environment: "{{ proxy_env | default({}) }}"
 
     - name: Set latest CLI version fact
       ansible.builtin.set_fact:
         latest_cli_version: "{{ cli_ver_response.content | trim }}"
-        
+
     - name: Log installed and latest Cilium CLI versions
       ansible.builtin.debug:
         msg: |
@@ -115,7 +115,7 @@
     - name: Get latest stable Cilium version
       ansible.builtin.uri:
         url: https://raw.githubusercontent.com/cilium/cilium/main/stable.txt
-        return_content: yes
+        return_content: true
       register: cilium_ver_response
       environment: "{{ proxy_env | default({}) }}"
 
@@ -126,7 +126,7 @@
     - name: Get installed Cilium release info
       kubernetes.core.helm_info:
         name: "{{ cilium_release_name }}"
-        release_namespace: "{{ cilium_namespace | default('kube-system')}}"
+        release_namespace: "{{ cilium_namespace | default('kube-system') }}"
       register: cilium_info
       failed_when: false
       changed_when: false
@@ -146,7 +146,7 @@
       ansible.builtin.set_fact:
         cilium_needs_install: >-
           {{
-            (cilium_info.status.chart is not defined) or 
+            (cilium_info.status.chart is not defined) or
             (installed_cilium_version != (cilium_version | default(cilium_latest_version)))
           }}
 
@@ -154,7 +154,7 @@
       kubernetes.core.helm:
         name: "{{ cilium_release_name }}"
         chart_ref: "{{ cilium_repo_name }}/{{ cilium_chart_name }}"
-        release_namespace: "{{ cilium_namespace | default('kube-system')}}"
+        release_namespace: "{{ cilium_namespace | default('kube-system') }}"
         chart_version: "{{ cilium_version | default(cilium_latest_version) }}"
         create_namespace: true
         values: "{{ cilium_helm_values }}"
@@ -218,6 +218,3 @@
         state: present
         definition: "{{ lookup('template', 'cilium_bgp.j2') | from_yaml_all }}"
       when: cilium_bgp | default(false)
-
-
-

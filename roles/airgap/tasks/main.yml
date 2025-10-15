@@ -2,7 +2,6 @@
 - name: Check for Airgap
   when: airgap_dir is defined
   block:
-
     - name: Verify Ansible meets airgap version requirements.
       ansible.builtin.assert:
         that: "ansible_version.full is version_compare('2.12', '>=')"

@@ -1,3 +1,4 @@
+---
 - name: Install and configure ArgoCD on first master
   when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
   run_once: true
@@ -57,14 +58,13 @@
     - name: Get latest stable ArgoCD chart
       ansible.builtin.uri:
         url: https://raw.githubusercontent.com/argoproj/argo-helm/main/charts/argo-cd/Chart.yaml
-        return_content: yes
+        return_content: true
       register: argocd_chart_response
       environment: "{{ proxy_env | default({}) }}"
 
     - name: Set latest ArgoCD chart version fact
       ansible.builtin.set_fact:
         argo_latest_version: "{{ (argocd_chart_response.content | from_yaml).version }}"
-
 
     - name: Check if ArgoCD is already installed
       ansible.builtin.command: "helm list -n {{ argocd_namespace }} --filter '^{{ argocd_release_name }}$' -o json"
@@ -100,7 +100,7 @@
       ansible.builtin.set_fact:
         admin_password: "{{ argocd_admin_password if (argocd_admin_password is defined and argocd_admin_password != '') else generated_admin_password }}"
       when: argocd_needs_install
-    
+
     - name: Install or upgrade ArgoCD using Helm
       kubernetes.core.helm:
         name: "{{ argocd_release_name }}"
@@ -172,4 +172,4 @@
       ansible.builtin.file:
         path: /tmp/k3s
         state: absent
-      when: false  # Keep temp directory for credentials filefalse  # Keep temp directory for credentials filese  # Keep temp directory for credentials file
+      when: false # Keep temp directory for credentials filefalse  # Keep temp directory for credentials filese  # Keep temp directory for credentials file

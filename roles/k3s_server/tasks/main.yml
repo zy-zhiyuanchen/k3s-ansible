@@ -35,12 +35,11 @@
       }) }}"
       changed_when: true
 
-
 - name: Add K3s autocomplete to user bashrc
   when: ansible_user is defined
   ansible.builtin.lineinfile:
     path: "~{{ ansible_user }}/.bashrc"
-    regexp: '\.\s+<\(k3s completion bash\)'
+    regexp: "\\.\\s+<\\(k3s completion bash\\)"
     line: ". <(k3s completion bash)  # Added by k3s-ansible"
 
 - name: Setup optional config file
@@ -129,7 +128,7 @@
         seconds: 10
 
     - name: Check whether kubectl is installed on control node
-      ansible.builtin.command: 'kubectl'
+      ansible.builtin.command: "kubectl"
       register: kubectl_installed
       ignore_errors: true
       delegate_to: 127.0.0.1
@@ -170,8 +169,8 @@
           when: kubeconfig == "~/.kube/config.new"
           ansible.builtin.replace:
             path: "{{ kubeconfig }}"
-            regexp: 'default'
-            replace: '{{ cluster_context }}'
+            regexp: "default"
+            replace: "{{ cluster_context }}"
           delegate_to: 127.0.0.1
           become: false
 
@@ -286,7 +285,6 @@
 - name: Setup kubectl for user
   when: user_kubectl
   block:
-
     - name: Create directory .kube
       ansible.builtin.file:
         path: ~{{ ansible_user }}/.kube
@@ -305,12 +303,12 @@
     - name: Configure default KUBECONFIG for user
       ansible.builtin.lineinfile:
         path: ~{{ ansible_user }}/.bashrc
-        regexp: 'export KUBECONFIG=~/.kube/config'
-        line: 'export KUBECONFIG=~/.kube/config # Added by k3s-ansible'
+        regexp: "export KUBECONFIG=~/.kube/config"
+        line: "export KUBECONFIG=~/.kube/config # Added by k3s-ansible"
         state: present
 
     - name: Configure kubectl autocomplete
       ansible.builtin.lineinfile:
         path: ~{{ ansible_user }}/.bashrc
-        regexp: '\.\s+<\(kubectl completion bash\)'
+        regexp: "\\.\\s+<\\(kubectl completion bash\\)"
         line: ". <(kubectl completion bash)  # Added by k3s-ansible"
